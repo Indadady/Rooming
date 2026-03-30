@@ -38,26 +38,57 @@
     <style>
         body { font-family: 'Noto Sans KR', sans-serif; background-color: #f8fafc; overflow-x: hidden; }
         
-        /* 인쇄 최적화 (A4 비율 100% 보장 및 여백/넘침 차단) */
+        /* 인쇄 최적화 (A4 비율 100% 보장 및 동적 스케일링) */
         @media print {
             .no-print { display: none !important; }
             body { background-color: white !important; padding: 0 !important; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             
+            /* 명단 인쇄용 기본 뼈대 */
             .print-traveler-list { width: 100% !important; max-width: none !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; @page { size: A4 portrait; margin: 10mm; } }
             .print-traveler-list .table-wrapper { overflow: visible !important; width: 100% !important; }
             .print-traveler-list table { border-collapse: collapse !important; width: 100% !important; page-break-inside: auto; min-width: 0 !important; }
             .print-traveler-list thead { display: table-header-group; }
             .print-traveler-list tfoot { display: table-footer-group; }
             .print-traveler-list tr { page-break-inside: avoid; page-break-after: auto; }
-            .print-traveler-list th, .print-traveler-list td { border: none !important; border-bottom: 1px solid #e2e8f0 !important; padding: 8px 2px !important; font-size: 8.5pt !important; }
-            .print-traveler-list th { border-top: 2px solid #1e293b !important; border-bottom: 2px solid #1e293b !important; color: #1e293b !important; }
             .print-traveler-list th.no-border-top, .print-traveler-list td.no-border-top { border: none !important; padding: 0 !important; }
             
+            /* --- [명단] 동적 인쇄 사이즈 조절 --- */
+            /* 1. 소규모 (1~10명): 글자 크기 13pt, 상하 여백 대폭 확대 */
+            .print-size-lg .print-traveler-list th, .print-size-lg .print-traveler-list td { padding: 20px 4px !important; font-size: 13pt !important; border-bottom: 1px solid #cbd5e1 !important; }
+            .print-size-lg .editable-cell-input { font-size: 13pt !important; font-weight: 700 !important; }
+            .print-size-lg .print-traveler-list th { border-top: 3px solid #1e293b !important; border-bottom: 3px solid #1e293b !important; }
+            
+            /* 2. 중규모 (11~20명): 글자 크기 11pt, 상하 여백 적당히 확대 */
+            .print-size-md .print-traveler-list th, .print-size-md .print-traveler-list td { padding: 13px 3px !important; font-size: 11pt !important; border-bottom: 1px solid #cbd5e1 !important; }
+            .print-size-md .editable-cell-input { font-size: 11pt !important; font-weight: 600 !important; }
+            .print-size-md .print-traveler-list th { border-top: 2px solid #1e293b !important; border-bottom: 2px solid #1e293b !important; }
+
+            /* 3. 대규모 (21명 이상): 기존 콤팩트 모드 */
+            .print-size-sm .print-traveler-list th, .print-size-sm .print-traveler-list td { padding: 8px 2px !important; font-size: 8.5pt !important; border-bottom: 1px solid #e2e8f0 !important; }
+            .print-size-sm .editable-cell-input { font-size: 8.5pt !important; }
+            .print-size-sm .print-traveler-list th { border-top: 2px solid #1e293b !important; border-bottom: 2px solid #1e293b !important; }
+
+            /* --- [방배정] 동적 인쇄 사이즈 조절 --- */
             .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; @page { size: A4 portrait; margin: 10mm; } }
             .print-page { page-break-after: always; break-inside: avoid !important; display: flex !important; flex-direction: column !important; min-height: 277mm !important; }
             .print-page:last-child { page-break-after: auto; }
-            .room-table-container, .room-row { break-inside: avoid; }
+            
+            /* 소규모 객실 (1~10칸) */
+            .print-room-size-lg .room-row { min-height: 110px !important; padding: 10px 0 !important; }
+            .print-room-size-lg .editable-cell-input, .print-room-size-lg .room-row input { font-size: 13pt !important; font-weight: 700 !important; }
+            .print-room-size-lg .room-row select { font-size: 11pt !important; }
+            .print-room-size-lg .room-row button { font-size: 10pt !important; padding: 4px 6px !important; }
+            .print-room-size-lg .flex-col.px-1\.5 { padding-top: 8px !important; padding-bottom: 8px !important; } /* 손님 한명당 여백 증가 */
+
+            /* 중규모 객실 (11~20칸) */
+            .print-room-size-md .room-row { min-height: 85px !important; padding: 5px 0 !important; }
+            .print-room-size-md .editable-cell-input, .print-room-size-md .room-row input { font-size: 11pt !important; font-weight: 600 !important; }
+            .print-room-size-md .room-row select { font-size: 10pt !important; }
+
+            /* 대규모 객실 (21칸 이상 - 기본) */
+            .print-room-size-sm .room-row { min-height: 72px !important; }
+            
             input, select, textarea { border: none !important; background: transparent !important; appearance: none; -webkit-appearance: none; }
         }
 
@@ -112,7 +143,6 @@
             return `${engFamily} ${engGiven}`.trim(); 
         };
 
-        // 자동 늘어나는 메모장 컴포넌트
         const AutoResizeTextarea = ({ value, onChange, placeholder, minRows = 4 }) => {
             const textareaRef = useRef(null);
 
@@ -141,23 +171,19 @@
 
         const App = () => {
             // 외부 공유 모드 판별 (URL 파라미터 ?shared=true)
-            const [isSharedMode, setIsSharedMode] = useState(false);
-            
-            useEffect(() => {
-                const params = new URLSearchParams(window.location.search);
-                if (params.get('shared') === 'true') {
-                    setIsSharedMode(true);
-                }
+            const isInitialShared = useMemo(() => {
+                return new URLSearchParams(window.location.search).get('shared') === 'true';
             }, []);
 
-            const [activeMainTab, setActiveMainTab] = useState('traveler');
+            const [isSharedMode, setIsSharedMode] = useState(isInitialShared);
+            const [activeMainTab, setActiveMainTab] = useState(isInitialShared ? 'rooming' : 'traveler');
             const [isNavMenuOpen, setIsNavMenuOpen] = useState(true);
 
-            // 통합 헤더 정보 (명단, 방배정 공통 적용)
+            // 통합 헤더 정보
             const [commonHeader, setCommonHeader] = useState({ groupName: "", date: "", location: "", number: "" });
 
             // ==========================================
-            // [TAB 1] 여행자 명단 (오직 수동 입력/표 작성)
+            // [TAB 1] 여행자 명단
             // ==========================================
             const [travelers, setTravelers] = useState([
                 { id: Date.now(), nameKor: "", nameEng: "", birth: "", gender: "M", passportNo: "", expiry: "", nation: "KOR", remark: "" }
@@ -199,7 +225,6 @@
             const addEmptyTraveler = () => setTravelers(prev => [...prev, { id: Date.now() + Math.random(), nameKor: "", nameEng: "", birth: "", gender: "M", passportNo: "", expiry: "", nation: "KOR", remark: "" }]);
             const removeTraveler = (id) => setTravelers(prev => prev.filter(t => t.id !== id));
             
-            // 부드러운 상태 업데이트 (함수형 업데이트 사용으로 타이핑 끊김 완전 해결)
             const updateField = (id, field, val) => {
                 setTravelers(prev => prev.map(t => {
                     if (t.id === id) {
@@ -216,6 +241,13 @@
                     }
                     return t;
                 }));
+            };
+
+            // 인원수에 따른 CSS 클래스 반환
+            const getTravelerPrintClass = () => {
+                if (travelers.length <= 10) return 'print-size-lg';
+                if (travelers.length <= 20) return 'print-size-md';
+                return 'print-size-sm';
             };
 
             // ==========================================
@@ -374,6 +406,12 @@
                 e.target.value = ''; 
             };
 
+            const getRoomPrintClass = () => {
+                if (rooms.length <= 10) return 'print-room-size-lg';
+                if (rooms.length <= 20) return 'print-room-size-md';
+                return 'print-room-size-sm';
+            };
+
             // ==========================================
             // [데이터 저장/불러오기 및 안전한 공유 링크 복사]
             // ==========================================
@@ -409,7 +447,6 @@
                 e.target.value = '';
             };
 
-            // 클립보드 보안 에러(NotAllowedError) 우회 완벽 적용
             const handleCopyLink = () => {
                 const baseUrl = window.location.origin + window.location.pathname;
                 const shareUrl = `${baseUrl}?shared=true`;
@@ -438,12 +475,12 @@
                 try {
                     const successful = document.execCommand('copy');
                     if(successful) {
-                        alert(`✅ 담당자 공유용 단축 링크(${urlToCopy})가 복사되었습니다!\n이 링크로 접속하면 불필요한 기능(저장/복사버튼 등)이 사라진 '심플 작성 모드'로 열립니다.`);
+                        alert(`✅ 담당자 공유용 단축 링크(${urlToCopy})가 복사되었습니다!\n이 링크로 접속하면 불필요한 기능이 숨겨진 '심플 작성 모드'로 열립니다.`);
                     } else {
-                        prompt("브라우저 정책으로 자동 복사에 실패했습니다. 아래 주소를 직접 복사(Ctrl+C)해 주세요:", urlToCopy);
+                        prompt("브라우저 정책으로 자동 복사에 실패했습니다. 아래 주소를 복사(Ctrl+C)해 주세요:", urlToCopy);
                     }
                 } catch (err) {
-                    prompt("브라우저 정책으로 자동 복사에 실패했습니다. 아래 주소를 직접 복사(Ctrl+C)해 주세요:", urlToCopy);
+                    prompt("브라우저 정책으로 자동 복사에 실패했습니다. 아래 주소를 복사(Ctrl+C)해 주세요:", urlToCopy);
                 } finally {
                     document.body.removeChild(textArea);
                 }
@@ -470,7 +507,6 @@
                     <div className="no-print bg-[#1e293b] border-b shadow-md sticky top-0 z-50">
                         <div className="max-w-[1400px] mx-auto px-3 md:px-4 flex flex-col md:flex-row justify-between items-center py-2 md:py-0 gap-2 md:gap-3">
                             
-                            {/* 로고 영역 */}
                             <div className="flex w-full md:w-auto justify-center md:justify-start items-center pb-1 md:pb-0">
                                 <div className="flex items-center gap-2 md:gap-3">
                                     <img src={TM_LOGO} className="h-5 md:h-6 filter brightness-0 invert" alt="Tourmaker Logo" />
@@ -479,7 +515,6 @@
                                 </div>
                             </div>
                             
-                            {/* 탭 영역 */}
                             <div className="flex w-full md:w-auto justify-center overflow-x-auto hide-scrollbar">
                                 <button onClick={() => setActiveMainTab('traveler')} className={`whitespace-nowrap px-3 md:px-5 py-2 md:py-4 h-full flex items-center font-bold text-[13px] md:text-sm border-b-[3px] transition-all md:rounded-t-md ${activeMainTab === 'traveler' ? 'border-blue-400 text-white bg-slate-800' : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
                                     <i className="fas fa-passport mr-2"></i> 1. 여행자 명단
@@ -489,9 +524,7 @@
                                 </button>
                             </div>
 
-                            {/* 컨트롤 버튼 영역 */}
                             <div className="flex w-full md:w-auto justify-end gap-2 pt-1 md:pt-0 border-t border-slate-700 md:border-none">
-                                {/* 외부 공유 모드가 아닐 때만 관리자 기능 표시 */}
                                 {!isSharedMode && (
                                     <React.Fragment>
                                         <button onClick={handleCopyLink} className="text-slate-300 hover:text-white px-2 py-1.5 text-xs font-bold transition flex items-center gap-1" title="공유용 단축 링크 생성 및 복사">
@@ -515,11 +548,10 @@
 
                     <main className="flex-grow p-2 sm:p-4 md:p-8">
                         {/* ========================================================================= */}
-                        {/* TAB 1: 여행자 명단 (군더더기 완전 삭제, 오직 명단 표 100% 포커스) */}
+                        {/* TAB 1: 여행자 명단 */}
                         {/* ========================================================================= */}
                         <div className={activeMainTab === 'traveler' ? 'block' : 'hidden'}>
-                            {/* 와이드 화면 적용 (max-w-full xl:max-w-[1400px]) */}
-                            <div className="print-container print-traveler-list bg-white w-full max-w-full xl:max-w-[1400px] mx-auto shadow-xl p-3 sm:p-5 md:p-8 flex flex-col border border-slate-200">
+                            <div className={`print-container print-traveler-list bg-white w-full max-w-full xl:max-w-[1400px] mx-auto shadow-xl p-3 sm:p-5 md:p-8 flex flex-col border border-slate-200 ${getTravelerPrintClass()}`}>
                                 <div className="no-print mb-3 flex flex-col gap-2 px-3 md:px-4 bg-blue-50 py-3 rounded border border-blue-100">
                                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                                         <p className="text-[11px] md:text-sm text-blue-800 font-bold leading-relaxed">
@@ -546,7 +578,6 @@
                                                         <div className="space-y-3 flex-1 w-full">
                                                             <h2 className="text-xl sm:text-3xl md:text-4xl font-black tracking-tighter text-slate-900 mt-2">OVERSEAS TRAVELERS LIST</h2>
                                                             <div className="grid grid-cols-1 gap-1 text-[10px] md:text-sm font-bold text-slate-700 max-w-full sm:max-w-[400px] md:max-w-[500px]">
-                                                                {/* 그룹명 동기화를 위해 통합 headerInfo 사용 */}
                                                                 <HeaderField label="GROUP NAME" value={commonHeader.groupName} onChange={(v) => setCommonHeader({ ...commonHeader, groupName: v })} />
                                                                 <HeaderField label="DATE" value={commonHeader.date} onChange={(v) => setCommonHeader({ ...commonHeader, date: v })} />
                                                                 <HeaderField label="NATION/LOCAL" value={commonHeader.location} onChange={(v) => setCommonHeader({ ...commonHeader, location: v })} />
@@ -647,10 +678,8 @@
                         {/* TAB 2: 방 배정 (루밍리스트) */}
                         {/* ========================================================================= */}
                         <div className={activeMainTab === 'rooming' ? 'block' : 'hidden'}>
-                            {/* 와이드 화면 적용 (max-w-full xl:max-w-[1400px]) */}
                             <div className="w-full max-w-full xl:max-w-[1400px] mx-auto p-0 sm:p-4 md:p-6 print-rooming-list">
                                 
-                                {/* 가이드 표시 여부 (모든 모드에서 작동하지만, 버튼 위치를 여기로 이동) */}
                                 <div className="no-print mb-4 md:mb-6">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 md:mb-4">
                                         <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm w-full sm:w-auto">
@@ -658,7 +687,6 @@
                                             <button onClick={() => setIsInternationalRooming(true)} className={`flex-1 sm:flex-none px-3 md:px-4 py-1.5 rounded text-xs md:text-sm font-bold transition ${isInternationalRooming ? 'bg-blue-50 text-blue-600' : 'text-slate-500'}`}>해외행사 (영문포함)</button>
                                         </div>
                                         
-                                        {/* 가이드 열기/닫기 버튼을 이 위치로 이동 (공유 모드에서도 노출됨) */}
                                         <button onClick={() => setIsNavMenuOpen(!isNavMenuOpen)} className="bg-white border border-slate-200 text-slate-600 hover:text-blue-600 px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition shadow-sm flex items-center gap-2 w-full sm:w-auto justify-center">
                                             <i className={`fas fa-chevron-${isNavMenuOpen ? 'up' : 'down'}`}></i> 작성 가이드 {isNavMenuOpen ? '닫기' : '열기'}
                                         </button>
@@ -724,11 +752,10 @@
                                         const pageStartIndex = pageIndex * ROOMS_PER_PAGE;
 
                                         return (
-                                            <div key={pageIndex} className="print-page bg-white shadow-xl p-3 sm:p-5 md:p-8 border-t-[4px] md:border-t-[6px] border-slate-800 print:shadow-none print:p-0 print:border-none print:m-0 relative flex flex-col justify-between" style={{ minHeight: '277mm' }}>
+                                            <div key={pageIndex} className={`print-page bg-white shadow-xl p-3 sm:p-5 md:p-8 border-t-[4px] md:border-t-[6px] border-slate-800 print:shadow-none print:p-0 print:border-none print:m-0 relative flex flex-col justify-between ${getRoomPrintClass()}`} style={{ minHeight: '277mm' }}>
                                                 <div className="flex-1 flex flex-col">
                                                     <div className="flex flex-col md:flex-row print:flex-row justify-between items-start md:items-end border-b-2 border-slate-800 pb-2 mb-3 gap-2 md:gap-4">
                                                         <div className="space-y-1.5 flex-1 min-w-0 w-full mt-1 max-w-full md:max-w-[500px]">
-                                                            {/* 그룹명 동기화를 위해 통합 headerInfo 사용 */}
                                                             <HeaderField label="GROUP" value={commonHeader.groupName} onChange={(v) => setCommonHeader({ ...commonHeader, groupName: v })} isMain={true} />
                                                             <HeaderField label="DATE" value={commonHeader.date} onChange={(v) => setCommonHeader({ ...commonHeader, date: v })} />
                                                             <HeaderField label="LOCATION" value={commonHeader.location} onChange={(v) => setCommonHeader({ ...commonHeader, location: v })} />
@@ -759,7 +786,6 @@
                                                         {isInternationalRooming ? <p className="text-[9px] md:text-[12px] font-bold text-red-600 no-print"><i className="fas fa-exclamation-circle mr-1"></i> 한글 입력 시 자동 변환된 영문명은 실제 여권과 상이할 수 있으므로 반드시 재확인 바랍니다.</p> : <div></div>}
                                                     </div>
 
-                                                    {/* 방배정 테이블: 모바일에서는 스크롤 가능하도록 table-wrapper 추가 */}
                                                     <p className="text-[10px] text-blue-600 font-bold block md:hidden mb-2 no-print"><i className="fas fa-arrows-alt-h mr-1"></i> 표를 좌우로 스크롤하여 작성하세요.</p>
                                                     <div className="table-wrapper">
                                                         <div className="grid grid-cols-1 lg:grid-cols-2 print:grid-cols-2 gap-x-8 gap-y-4 w-full min-w-[700px] lg:min-w-0">
@@ -837,7 +863,7 @@
                     return (
                         <div 
                             key={`${actualIdx}-${room.id}`} 
-                            className={`room-row grid ${GRID_COLS} border-b border-slate-200 group relative min-h-[60px] md:min-h-[72px] bg-white`}
+                            className={`room-row grid ${GRID_COLS} border-b border-slate-200 group relative bg-white`}
                             style={{ breakInside: 'avoid' }}
                             draggable
                             onDragStart={(e) => dragRoomStart(e, globalIdx)}
