@@ -38,10 +38,12 @@
     <style>
         body { font-family: 'Noto Sans KR', sans-serif; background-color: #f8fafc; overflow-x: hidden; }
         
-        /* 인쇄 최적화 (A4 비율 100% 보장 및 동적 스케일링) */
+        /* ========================================================
+           인쇄 최적화 (A4 비율 100% 보장 및 동적 스케일링 완벽 교정)
+           ======================================================== */
         @media print {
             .no-print { display: none !important; }
-            body { background-color: white !important; padding: 0 !important; }
+            body { background-color: white !important; padding: 0 !important; margin: 0 !important; }
             
             /* 글자 잘림(...) 완전 방지 */
             * { 
@@ -51,101 +53,95 @@
                 overflow: visible !important;
             }
             
-            /* 명단 및 방배정 공통 A4 페이지 설정 */
+            /* 명단 및 방배정 공통 A4 페이지 설정 (Flex 구조 적용) */
             @page { size: A4 portrait; margin: 10mm; }
 
             .print-page { 
                 box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; 
                 page-break-after: always; break-inside: avoid !important; 
+                display: flex !important; flex-direction: column !important; height: 277mm !important; /* A4 내용 높이 강제 */
             }
             .print-page:last-child { page-break-after: auto; }
 
             .print-traveler-list { 
                 box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; 
-                display: block !important; /* 플렉스 해제 후 자연스럽게 흐르도록 변경 */
-                padding-bottom: 35mm !important; /* 고정된 푸터와 겹치지 않게 하단 여백 확보 */
+                display: flex !important; flex-direction: column !important; height: 277mm !important; 
             }
             
-            /* 테이블 너비 자동 조절 (내용물에 맞춰서 늘어남 = 글자 안짤림) */
-            .print-traveler-list .table-wrapper { overflow: visible !important; width: 100% !important; }
-            .print-traveler-list table { border-collapse: collapse !important; width: 100% !important; table-layout: auto !important; }
+            /* 테이블 영역이 남는 공간을 적당히 밀어내도록 설정 */
+            .print-traveler-list .table-wrapper { flex: 1 !important; overflow: visible !important; width: 100% !important; }
+            
+            /* [핵심] 황금 비율 강제 고정 (table-layout: fixed) */
+            .print-traveler-list table { border-collapse: collapse !important; width: 100% !important; table-layout: fixed !important; }
             .print-traveler-list thead { display: table-header-group; }
             .print-traveler-list tr { page-break-inside: avoid; }
             .print-traveler-list th, .print-traveler-list td { 
                 border: none !important; border-bottom: 1px solid #e2e8f0 !important; 
-                padding: 8px 4px !important; font-size: 8.5pt !important; 
-                white-space: nowrap !important; /* 줄바꿈 방지 */
+                padding: 6px 2px !important; font-size: 8.5pt !important; 
+                word-wrap: break-word !important; /* 긴 글자 짤리지 않고 줄바꿈 허용 */
             }
             .print-traveler-list th { border-top: 2px solid #1e293b !important; border-bottom: 2px solid #1e293b !important; color: #1e293b !important; }
             .print-traveler-list th.no-border-top, .print-traveler-list td.no-border-top { border: none !important; padding: 0 !important; }
             
-            /* 비고란은 남는 공간 다 차지하도록 허용 */
-            .col-remark { white-space: normal !important; width: 100% !important; }
             .col-remark input { white-space: normal !important; width: 100% !important; }
 
-            /* 푸터를 종이 맨 바닥에 강력하게 고정 (메모장 여백 100% 확보) */
+            /* 푸터를 종이 맨 바닥에 강력하게 고정 (Flex margin-top auto 활용) */
             .print-footer { 
-                position: fixed !important; 
-                bottom: 0 !important; 
-                left: 0 !important; 
-                right: 0 !important; 
-                background: white !important; 
-                padding-top: 10px !important;
-                margin-top: 0 !important;
+                margin-top: auto !important; /* 맨 바닥으로 밀어내기 */
                 page-break-inside: avoid;
+                width: 100%;
+                padding-top: 15px !important;
             }
 
-            /* 입력창들이 input이 아니라 텍스트처럼 보이게 */
             .editable-cell-input { 
-                white-space: nowrap !important; 
-                width: auto !important; 
-                min-width: 100% !important; 
+                white-space: normal !important; 
+                width: 100% !important; 
             }
 
-            /* --- [명단] 동적 인쇄 사이즈 조절 (글씨 겹침 해결) --- */
-            /* 1. 소규모 (1~10명) */
-            .print-size-lg .print-traveler-list th, .print-size-lg .print-traveler-list td { padding: 16px 4px !important; font-size: 12pt !important; border-bottom: 1px solid #cbd5e1 !important; }
-            .print-size-lg .editable-cell-input { font-size: 12pt !important; font-weight: 700 !important; }
+            /* --- [명단] 동적 인쇄 사이즈 조절 (글씨 겹침 해결 & 높이 위주로 확대) --- */
+            /* 1. 소규모 (1~10명): 글자는 적당히, 위아래 높이를 넉넉하게 */
+            .print-size-lg .print-traveler-list th, .print-size-lg .print-traveler-list td { padding: 14px 2px !important; font-size: 10.5pt !important; border-bottom: 1px solid #cbd5e1 !important; }
+            .print-size-lg .editable-cell-input { font-size: 10.5pt !important; font-weight: 700 !important; }
             .print-size-lg .print-traveler-list th { border-top: 3px solid #1e293b !important; border-bottom: 3px solid #1e293b !important; }
-            .print-size-lg .header-label { font-size: 11pt !important; min-width: 140px !important; width: 140px !important; } /* 영어 라벨 넓게 확보 */
-            .print-size-lg .header-input { font-size: 15pt !important; margin-left: 8px !important; }
-            .print-size-lg .main-title { font-size: 26pt !important; margin-bottom: 12px !important; }
+            .print-size-lg .header-label { font-size: 9pt !important; width: 100px !important; min-width: 100px !important; } /* 안정적인 라벨 공간 */
+            .print-size-lg .header-input { font-size: 12pt !important; margin-left: 5px !important; }
+            .print-size-lg .main-title { font-size: 24pt !important; margin-bottom: 8px !important; }
             
-            /* 2. 중규모 (11~20명) */
-            .print-size-md .print-traveler-list th, .print-size-md .print-traveler-list td { padding: 11px 3px !important; font-size: 10.5pt !important; border-bottom: 1px solid #cbd5e1 !important; }
-            .print-size-md .editable-cell-input { font-size: 10.5pt !important; font-weight: 600 !important; }
+            /* 2. 중규모 (11~20명): 중간 사이즈 */
+            .print-size-md .print-traveler-list th, .print-size-md .print-traveler-list td { padding: 10px 2px !important; font-size: 9.5pt !important; border-bottom: 1px solid #cbd5e1 !important; }
+            .print-size-md .editable-cell-input { font-size: 9.5pt !important; font-weight: 600 !important; }
             .print-size-md .print-traveler-list th { border-top: 2px solid #1e293b !important; border-bottom: 2px solid #1e293b !important; }
-            .print-size-md .header-label { font-size: 9.5pt !important; min-width: 110px !important; }
-            .print-size-md .header-input { font-size: 13pt !important; margin-left: 5px !important; }
-            .print-size-md .main-title { font-size: 22pt !important; margin-bottom: 8px !important; }
+            .print-size-md .header-label { font-size: 8.5pt !important; width: 90px !important; min-width: 90px !important; }
+            .print-size-md .header-input { font-size: 11pt !important; margin-left: 5px !important; }
+            .print-size-md .main-title { font-size: 20pt !important; margin-bottom: 6px !important; }
 
-            /* 3. 대규모 (21명 이상) */
-            .print-size-sm .header-label { font-size: 8.5pt !important; min-width: 90px !important; }
-            .print-size-sm .header-input { font-size: 11pt !important; }
+            /* 3. 대규모 (21명 이상): 콤팩트 사이즈 */
+            .print-size-sm .header-label { font-size: 8pt !important; width: 80px !important; min-width: 80px !important; }
+            .print-size-sm .header-input { font-size: 10pt !important; }
             .print-size-sm .main-title { font-size: 18pt !important; margin-bottom: 5px !important; }
 
             /* --- [방배정] 동적 인쇄 사이즈 조절 --- */
-            .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; display: block !important; padding-bottom: 35mm !important; }
+            .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; display: flex !important; flex-direction: column !important; height: 277mm !important; }
             .room-table-container, .room-row { break-inside: avoid; }
             
-            .print-room-size-lg .room-row { min-height: 100px !important; padding: 10px 0 !important; }
-            .print-room-size-lg .editable-cell-input, .print-room-size-lg .room-row input { font-size: 12pt !important; font-weight: 700 !important; }
-            .print-room-size-lg .room-row select { font-size: 11pt !important; }
-            .print-room-size-lg .flex-col.px-1\.5 { padding-top: 8px !important; padding-bottom: 8px !important; } 
-            .print-room-size-lg .header-label { font-size: 11pt !important; min-width: 140px !important; width: 140px !important;}
-            .print-room-size-lg .header-input { font-size: 15pt !important; margin-left: 8px !important; }
-            .print-room-size-lg .main-title { font-size: 26pt !important; }
+            .print-room-size-lg .room-row { min-height: 80px !important; padding: 5px 0 !important; }
+            .print-room-size-lg .editable-cell-input, .print-room-size-lg .room-row input { font-size: 11pt !important; font-weight: 700 !important; }
+            .print-room-size-lg .room-row select { font-size: 10pt !important; }
+            .print-room-size-lg .flex-col.px-1\.5 { padding-top: 6px !important; padding-bottom: 6px !important; } 
+            .print-room-size-lg .header-label { font-size: 9pt !important; width: 100px !important; min-width: 100px !important;}
+            .print-room-size-lg .header-input { font-size: 12pt !important; margin-left: 5px !important; }
+            .print-room-size-lg .main-title { font-size: 24pt !important; }
 
-            .print-room-size-md .room-row { min-height: 80px !important; padding: 5px 0 !important; }
-            .print-room-size-md .editable-cell-input, .print-room-size-md .room-row input { font-size: 10.5pt !important; font-weight: 600 !important; }
+            .print-room-size-md .room-row { min-height: 70px !important; padding: 3px 0 !important; }
+            .print-room-size-md .editable-cell-input, .print-room-size-md .room-row input { font-size: 10pt !important; font-weight: 600 !important; }
             .print-room-size-md .room-row select { font-size: 9pt !important; }
-            .print-room-size-md .header-label { font-size: 9.5pt !important; min-width: 110px !important;}
-            .print-room-size-md .header-input { font-size: 13pt !important; margin-left: 5px !important;}
-            .print-room-size-md .main-title { font-size: 22pt !important; }
+            .print-room-size-md .header-label { font-size: 8.5pt !important; width: 90px !important; min-width: 90px !important;}
+            .print-room-size-md .header-input { font-size: 11pt !important; margin-left: 5px !important;}
+            .print-room-size-md .main-title { font-size: 20pt !important; }
 
             .print-room-size-sm .room-row { min-height: 60px !important; }
-            .print-room-size-sm .header-label { font-size: 8.5pt !important; min-width: 90px !important;}
-            .print-room-size-sm .header-input { font-size: 11pt !important; }
+            .print-room-size-sm .header-label { font-size: 8pt !important; width: 80px !important; min-width: 80px !important;}
+            .print-room-size-sm .header-input { font-size: 10pt !important; }
             .print-room-size-sm .main-title { font-size: 18pt !important; }
             
             input, select, textarea { border: none !important; background: transparent !important; appearance: none; -webkit-appearance: none; }
@@ -159,11 +155,14 @@
         .editable-cell-input:hover { background-color: #f1f5f9; cursor: text; border-radius: 4px; padding-left: 4px; padding-right: 4px; overflow: visible; }
         .editable-cell-input:focus { background-color: #e0f2fe; border-bottom: 2px solid #3b82f6; outline: none; padding-left: 4px; overflow: visible; }
 
+        /* 모바일 테이블 스와이프를 위한 부드러운 스크롤 */
         .table-wrapper { overflow-x: auto; width: 100%; padding-bottom: 15px; -webkit-overflow-scrolling: touch; }
 
+        /* 모바일 탭 스크롤 숨김 */
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+        /* 커스텀 스크롤바 */
         ::-webkit-scrollbar { height: 6px; width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
@@ -177,8 +176,7 @@
     <script type="text/babel">
         const { useState, useRef, useMemo, useEffect } = React;
 
-        const TM_LOGO = "https://blogger.googleusercontent.com/img/a/AVvXsEhPxG_ONo2BdFAGDNnn-pHIGJTrAq374YbqgwTTlyIZTP22kOWTDD_AyjKDNFPhsHg5t1Iq6zV0dL_NZIj4o97Kd0eWJYCv-NHhtIqme-Mp3htGhAdkqVv5NRU3Jc9TbdbvvVKrPslObA1oNABpgl12QtGwirC2QM5lcPCVoWm8pIbeKuZBbeDHAvpbKEQ";
-        const LOGO_IMG = "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgHfgIX70O5k6Anuo0UgALIdaG9jSga9auHu3uyz0uEirylGPAJnjN_qQbvEGMUvPqUQf_g9FMNUHRxlDcUBf4vZ3Mpy4TnA9WxbmzWYK11gt2zuy_Irl4wctNFjcjLyPo0GPXV792o_J7L9guRMuDfeC1gy7USwywjYbECZgzcsHybuGRRAXAnO1eNmP8/s320/logo.png";
+        const TM_LOGO = "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgHfgIX70O5k6Anuo0UgALIdaG9jSga9auHu3uyz0uEirylGPAJnjN_qQbvEGMUvPqUQf_g9FMNUHRxlDcUBf4vZ3Mpy4TnA9WxbmzWYK11gt2zuy_Irl4wctNFjcjLyPo0GPXV792o_J7L9guRMuDfeC1gy7USwywjYbECZgzcsHybuGRRAXAnO1eNmP8/s320/logo.png";
 
         // --- 영문 자동 변환 로직 ---
         const getRomanization = (char) => {
@@ -564,7 +562,7 @@
                             
                             <div className="flex w-full md:w-auto justify-center md:justify-start items-center pb-1 md:pb-0">
                                 <div className="flex items-center gap-2 md:gap-3">
-                                    <img src={LOGO_IMG} className="h-5 md:h-6 filter brightness-0 invert" alt="Tourmaker Logo" />
+                                    <img src={TM_LOGO} className="h-5 md:h-6 filter brightness-0 invert" alt="Tourmaker Logo" />
                                     <div className="h-3 md:h-4 w-[1px] bg-slate-500"></div>
                                     <h1 className="font-bold text-white tracking-wide text-xs md:text-sm">통합 관리 센터</h1>
                                 </div>
@@ -632,7 +630,7 @@
                                                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-4 border-slate-900 pb-3 md:pb-4 mb-2 gap-4">
                                                         <div className="space-y-3 flex-1 w-full">
                                                             <h2 className="main-title text-xl sm:text-3xl md:text-4xl font-black tracking-tighter text-slate-900 mt-2">OVERSEAS TRAVELERS LIST</h2>
-                                                            <div className="header-row flex flex-col gap-1 text-[10px] md:text-sm font-bold text-slate-700 max-w-full sm:max-w-[400px] md:max-w-[500px]">
+                                                            <div className="flex flex-col gap-1 text-[10px] md:text-sm font-bold text-slate-700 w-full print:max-w-none max-w-full sm:max-w-[400px]">
                                                                 <HeaderField label="GROUP NAME" value={commonHeader.groupName} onChange={(v) => setCommonHeader({ ...commonHeader, groupName: v })} />
                                                                 <HeaderField label="DATE" value={commonHeader.date} onChange={(v) => setCommonHeader({ ...commonHeader, date: v })} />
                                                                 <HeaderField label="NATION/LOCAL" value={commonHeader.location} onChange={(v) => setCommonHeader({ ...commonHeader, location: v })} />
@@ -645,19 +643,19 @@
                                                     </div>
                                                 </th>
                                             </tr>
-                                            {/* 국적 칸 너비 확대, 비고 칸은 남는 공간(w-full) 사용 */}
+                                            {/* 완벽한 황금 비율 강제 부여 (table-layout: fixed) */}
                                             <tr className="text-slate-800 border-t-2 border-b-2 border-slate-800 bg-transparent">
-                                                <th className="no-print p-2 md:p-3 w-8 text-center"><i className="fas fa-sort text-slate-300"></i></th>
-                                                <th className="p-2 md:p-3 w-10 text-center font-bold">NO</th>
-                                                <th className="p-2 md:p-3 text-left font-bold whitespace-nowrap">성명</th>
-                                                <th className="p-2 md:p-3 text-left font-bold whitespace-nowrap">NAME (영문명)</th>
-                                                <th className="p-2 md:p-3 text-left font-bold whitespace-nowrap">생년월일</th>
-                                                <th className="p-2 md:p-3 w-12 text-center font-bold whitespace-nowrap">성별</th>
-                                                <th className="p-2 md:p-3 text-left font-bold whitespace-nowrap">여권번호</th>
-                                                <th className="p-2 md:p-3 text-left font-bold whitespace-nowrap">여권만료일</th>
-                                                <th className="p-2 md:p-3 text-center font-bold whitespace-nowrap min-w-[50px]">국적</th>
-                                                <th className="p-2 md:p-3 text-left font-bold col-remark w-full">비고</th>
-                                                <th className="p-2 md:p-3 no-print w-10 text-center font-bold">삭제</th>
+                                                <th className="no-print w-8 text-center"><i className="fas fa-sort text-slate-300"></i></th>
+                                                <th className="print:w-[5%] w-10 text-center font-bold">NO</th>
+                                                <th className="print:w-[12%] text-left font-bold whitespace-nowrap">성명</th>
+                                                <th className="print:w-[18%] text-left font-bold whitespace-nowrap">NAME (영문명)</th>
+                                                <th className="print:w-[12%] text-left font-bold whitespace-nowrap">생년월일</th>
+                                                <th className="print:w-[5%] w-12 text-center font-bold whitespace-nowrap">성별</th>
+                                                <th className="print:w-[14%] text-left font-bold whitespace-nowrap">여권번호</th>
+                                                <th className="print:w-[12%] text-left font-bold whitespace-nowrap">여권만료일</th>
+                                                <th className="print:w-[8%] text-center font-bold whitespace-nowrap">국적</th>
+                                                <th className="print:w-[14%] text-left font-bold col-remark">비고</th>
+                                                <th className="no-print w-10 text-center font-bold">삭제</th>
                                             </tr>
                                         </thead>
 
@@ -670,29 +668,29 @@
                                                 const status = getExpiryStatus(t.expiry);
                                                 return (
                                                     <tr key={t.id} className="border-b border-slate-200 hover:bg-slate-50 transition group bg-white" draggable onDragStart={(e) => dragStart(e, idx)} onDragEnter={(e) => dragEnter(e, idx)} onDragEnd={dragEnd} onDrop={drop} onDragOver={(e) => e.preventDefault()}>
-                                                        <td className="no-print p-2 md:p-3 text-center text-slate-300 hover:text-blue-500 drag-handle" title="드래그하여 순서 변경">
+                                                        <td className="no-print p-2 text-center text-slate-300 hover:text-blue-500 drag-handle" title="드래그하여 순서 변경">
                                                             <i className="fas fa-bars"></i>
                                                         </td>
-                                                        <td className="p-2 md:p-3 text-center text-slate-500 font-bold text-xs md:text-sm">{idx + 1}</td>
-                                                        <td className="p-1 md:p-3"><EditableCell val={t.nameKor} onChange={(v) => updateField(t.id, 'nameKor', v)} bold /></td>
-                                                        <td className="p-1 md:p-3"><EditableCell val={t.nameEng} onChange={(v) => updateField(t.id, 'nameEng', v)} uppercase /></td>
-                                                        <td className="p-1 md:p-3"><EditableCell val={t.birth} onChange={(v) => updateField(t.id, 'birth', v)} placeholder="YYYY-MM-DD" /></td>
-                                                        <td className="p-1 md:p-3 text-center">
+                                                        <td className="p-2 text-center text-slate-500 font-bold text-xs md:text-sm">{idx + 1}</td>
+                                                        <td className="p-1"><EditableCell val={t.nameKor} onChange={(v) => updateField(t.id, 'nameKor', v)} bold /></td>
+                                                        <td className="p-1"><EditableCell val={t.nameEng} onChange={(v) => updateField(t.id, 'nameEng', v)} uppercase /></td>
+                                                        <td className="p-1"><EditableCell val={t.birth} onChange={(v) => updateField(t.id, 'birth', v)} placeholder="YYYY-MM-DD" /></td>
+                                                        <td className="p-1 text-center">
                                                             <select className="bg-transparent border-none outline-none cursor-pointer text-slate-700 font-bold editable-cell-input text-center" value={t.gender} onChange={(e) => updateField(t.id, 'gender', e.target.value)}>
                                                                 <option value="M">M</option>
                                                                 <option value="F">F</option>
                                                             </select>
                                                         </td>
-                                                        <td className="p-1 md:p-3"><EditableCell val={t.passportNo} onChange={(v) => updateField(t.id, 'passportNo', v)} uppercase /></td>
-                                                        <td className={`p-1 md:p-3 ${status.color}`}>
+                                                        <td className="p-1"><EditableCell val={t.passportNo} onChange={(v) => updateField(t.id, 'passportNo', v)} uppercase /></td>
+                                                        <td className={`p-1 ${status.color}`}>
                                                             <div className="flex items-center justify-between gap-1">
                                                                 <EditableCell val={t.expiry} onChange={(v) => updateField(t.id, 'expiry', v)} placeholder="YYYY-MM-DD" />
                                                                 {status.warning && <i className="fas fa-exclamation-triangle text-orange-400 no-print" title={status.msg}></i>}
                                                             </div>
                                                         </td>
-                                                        <td className="p-1 md:p-3 text-center"><EditableCell val={t.nation} onChange={(v) => updateField(t.id, 'nation', v)} center uppercase /></td>
-                                                        <td className="p-1 md:p-3 col-remark"><EditableCell val={t.remark} onChange={(v) => updateField(t.id, 'remark', v)} /></td>
-                                                        <td className="p-2 md:p-3 no-print text-center">
+                                                        <td className="p-1 text-center"><EditableCell val={t.nation} onChange={(v) => updateField(t.id, 'nation', v)} center uppercase /></td>
+                                                        <td className="p-1 col-remark"><EditableCell val={t.remark} onChange={(v) => updateField(t.id, 'remark', v)} /></td>
+                                                        <td className="p-2 no-print text-center">
                                                             <button onClick={() => removeTraveler(t.id)} className="text-slate-300 hover:text-red-500 transition px-1"><i className="fas fa-trash-alt"></i></button>
                                                         </td>
                                                     </tr>
@@ -708,13 +706,13 @@
                                     </div>
                                 </div>
 
-                                {/* 푸터 (메모장 여백 제공을 위해 바닥에 고정됨) */}
-                                <div className="print-footer mt-auto pt-6 md:pt-8 border-t border-slate-300 w-full">
+                                {/* 푸터 (메모장 여백 제공을 위해 flex로 인해 맨 바닥에 고정됨) */}
+                                <div className="print-footer border-t border-slate-300 w-full">
                                     <div className="flex justify-between items-end mb-3 md:mb-4">
                                         <div className="text-[9px] md:text-[11px] font-bold text-slate-500">제출일: {new Date().toLocaleDateString()}</div>
                                         <div className="text-right">
                                             <a href="https://tourmaker.kr" target="_blank" rel="noreferrer">
-                                                <img src={LOGO_IMG} className="h-5 md:h-6 opacity-80 hover:opacity-100 transition" alt="Tourmaker Logo" />
+                                                <img src={TM_LOGO} className="h-5 md:h-6 opacity-80 hover:opacity-100 transition" alt="Tourmaker Logo" />
                                             </a>
                                         </div>
                                     </div>
@@ -848,7 +846,7 @@
                                                     </div>
                                                 </div>
 
-                                                <div className="print-footer mt-auto pt-6 md:pt-8 border-t border-slate-300 w-full">
+                                                <div className="print-footer border-t border-slate-300 w-full">
                                                     <div className="flex justify-between items-end mb-3 md:mb-4">
                                                         <div className="text-[9px] md:text-[11px] font-bold text-slate-500">제출일: {new Date().toLocaleDateString()}</div>
                                                         <div className="text-right">
