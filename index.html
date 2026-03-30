@@ -44,17 +44,19 @@
             body { background-color: white !important; padding: 0 !important; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             
-            .print-traveler-list { width: 100% !important; max-width: none !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; @page { size: A4 portrait; margin: 15mm; } }
+            /* 명단 인쇄용 */
+            .print-traveler-list { width: 100% !important; max-width: none !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; @page { size: A4 portrait; margin: 10mm; } }
             .print-traveler-list .table-wrapper { overflow: visible !important; width: 100% !important; }
             .print-traveler-list table { border-collapse: collapse !important; width: 100% !important; page-break-inside: auto; min-width: 0 !important; }
             .print-traveler-list thead { display: table-header-group; }
             .print-traveler-list tfoot { display: table-footer-group; }
             .print-traveler-list tr { page-break-inside: avoid; page-break-after: auto; }
-            .print-traveler-list th, .print-traveler-list td { border: none !important; border-bottom: 1px solid #e2e8f0 !important; padding: 10px 2px !important; font-size: 9pt !important; }
+            .print-traveler-list th, .print-traveler-list td { border: none !important; border-bottom: 1px solid #e2e8f0 !important; padding: 8px 2px !important; font-size: 8.5pt !important; }
             .print-traveler-list th { border-top: 2px solid #1e293b !important; border-bottom: 2px solid #1e293b !important; color: #1e293b !important; }
             .print-traveler-list th.no-border-top, .print-traveler-list td.no-border-top { border: none !important; padding: 0 !important; }
             
-            .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; @page { size: A4 portrait; margin: 8mm; } }
+            /* 루밍리스트 인쇄용 */
+            .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; @page { size: A4 portrait; margin: 10mm; } }
             .print-page { page-break-after: always; break-inside: avoid !important; display: flex !important; flex-direction: column !important; min-height: 277mm !important; }
             .print-page:last-child { page-break-after: auto; }
             .room-table-container, .room-row { break-inside: avoid; }
@@ -118,14 +120,10 @@
 
             const handleChange = (e) => {
                 onChange(e.target.value);
-                if (textareaRef.current) {
-                    textareaRef.current.style.height = 'auto';
-                    textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
-                }
             };
 
             useEffect(() => {
-                if (textareaRef.current && value === "") {
+                if (textareaRef.current) {
                     textareaRef.current.style.height = 'auto';
                     textareaRef.current.style.height = Math.max(textareaRef.current.scrollHeight, minRows * 24 + 32) + 'px';
                 }
@@ -157,7 +155,7 @@
             const [activeMainTab, setActiveMainTab] = useState('traveler');
             const [isNavMenuOpen, setIsNavMenuOpen] = useState(true);
 
-            // 통합 헤더 정보
+            // 통합 헤더 정보 (명단, 방배정 공통 적용)
             const [commonHeader, setCommonHeader] = useState({ groupName: "", date: "", location: "", number: "" });
 
             // ==========================================
@@ -176,12 +174,14 @@
                 const tr = e.target.closest('tr');
                 if (tr) tr.classList.remove('dragging');
                 if (dragItem.current === null || dragOverItem.current === null) return;
-                const copyListItems = [...travelers];
-                const dragItemContent = copyListItems[dragItem.current];
-                copyListItems.splice(dragItem.current, 1);
-                copyListItems.splice(dragOverItem.current, 0, dragItemContent);
+                setTravelers(prev => {
+                    const copyListItems = [...prev];
+                    const dragItemContent = copyListItems[dragItem.current];
+                    copyListItems.splice(dragItem.current, 1);
+                    copyListItems.splice(dragOverItem.current, 0, dragItemContent);
+                    return copyListItems;
+                });
                 dragItem.current = null; dragOverItem.current = null;
-                setTravelers(copyListItems);
             };
             const dragEnd = (e) => { e.target.closest('tr')?.classList.remove('dragging'); };
 
@@ -198,25 +198,27 @@
                 return { color: "text-slate-700", warning: false };
             };
 
-            const addEmptyTraveler = () => setTravelers([...travelers, { id: Date.now() + Math.random(), nameKor: "", nameEng: "", birth: "", gender: "M", passportNo: "", expiry: "", nation: "KOR", remark: "" }]);
-            const removeTraveler = (id) => setTravelers(travelers.filter(t => t.id !== id));
+            const addEmptyTraveler = () => setTravelers(prev => [...prev, { id: Date.now() + Math.random(), nameKor: "", nameEng: "", birth: "", gender: "M", passportNo: "", expiry: "", nation: "KOR", remark: "" }]);
+            const removeTraveler = (id) => setTravelers(prev => prev.filter(t => t.id !== id));
             
-            const updateField = (id, field, val) => setTravelers(travelers.map(t => {
-                if (t.id === id) {
-                    const updated = { ...t, [field]: val };
-                    // 한글명 입력 시 영문명이 비어있거나, 이전 한글명의 자동변환값과 같을 때만 새 영문명 자동 반영
-                    if (field === 'nameKor') {
-                        if (!t.nameEng || t.nameEng === koreanToEnglish(t.nameKor)) {
-                            updated.nameEng = koreanToEnglish(val);
+            // 부드러운 상태 업데이트 (함수형 업데이트 사용으로 타이핑 끊김 완전 해결)
+            const updateField = (id, field, val) => {
+                setTravelers(prev => prev.map(t => {
+                    if (t.id === id) {
+                        const updated = { ...t, [field]: val };
+                        if (field === 'nameKor') {
+                            if (!t.nameEng || t.nameEng === koreanToEnglish(t.nameKor)) {
+                                updated.nameEng = koreanToEnglish(val);
+                            }
                         }
+                        if (field === 'nameEng') updated.nameEng = String(val).toUpperCase();
+                        if (field === 'passportNo') updated.passportNo = String(val).toUpperCase();
+                        if (field === 'nation') updated.nation = String(val).toUpperCase();
+                        return updated;
                     }
-                    if (field === 'nameEng') updated.nameEng = String(val).toUpperCase();
-                    if (field === 'passportNo') updated.passportNo = String(val).toUpperCase();
-                    if (field === 'nation') updated.nation = String(val).toUpperCase();
-                    return updated;
-                }
-                return t;
-            }));
+                    return t;
+                }));
+            };
 
             // ==========================================
             // [TAB 2] 방 배정 (루밍리스트)
@@ -237,12 +239,14 @@
                 const tr = e.target.closest('.room-row');
                 if (tr) tr.classList.remove('dragging');
                 if (dragRoomItem.current === null || dragOverRoomItem.current === null) return;
-                const copyRooms = [...rooms];
-                const dragContent = copyRooms[dragRoomItem.current];
-                copyRooms.splice(dragRoomItem.current, 1);
-                copyRooms.splice(dragOverRoomItem.current, 0, dragContent);
+                setRooms(prev => {
+                    const copyRooms = [...prev];
+                    const dragContent = copyRooms[dragRoomItem.current];
+                    copyRooms.splice(dragRoomItem.current, 1);
+                    copyRooms.splice(dragOverRoomItem.current, 0, dragContent);
+                    return copyRooms;
+                });
                 dragRoomItem.current = null; dragOverRoomItem.current = null;
-                setRooms(copyRooms);
             };
             const dragRoomEnd = (e) => { e.target.closest('.room-row')?.classList.remove('dragging'); };
 
@@ -280,44 +284,57 @@
                     return { id: Date.now() + Math.random(), roomNo: "", type, guests: guests.slice(0, type === 'SINGLE' ? 1 : type === 'TWIN' ? 2 : type === 'TRIPLE' ? 3 : 4) };
                 });
                 
-                if (rooms.length === 1 && rooms[0].guests.every(g => g.name === "")) {
-                    setRooms(newRooms);
-                } else {
-                    setRooms([...rooms, ...newRooms]);
-                }
+                setRooms(prev => {
+                    if (prev.length === 1 && prev[0].guests.every(g => g.name === "")) return newRooms;
+                    return [...prev, ...newRooms];
+                });
                 setImportTextRooming("");
             };
 
-            const updateRoom = (rIdx, field, value) => { const newRooms = [...rooms]; newRooms[rIdx][field] = value; setRooms(newRooms); };
-            const updateGuest = (rIdx, gIdx, field, value) => {
-                const newRooms = [...rooms];
-                const oldGuest = newRooms[rIdx].guests[gIdx];
-                newRooms[rIdx].guests[gIdx][field] = value;
-                
-                if (field === 'name' && isInternationalRooming) {
-                    if (!oldGuest.engName || oldGuest.engName === koreanToEnglish(oldGuest.name)) {
-                        newRooms[rIdx].guests[gIdx].engName = koreanToEnglish(value);
+            const updateRoom = (rIdx, field, value) => { 
+                setRooms(prev => prev.map((room, idx) => idx === rIdx ? { ...room, [field]: value } : room)); 
+            };
+            
+            const updateGuest = (globalIdx, gIdx, field, value) => {
+                setRooms(prev => prev.map((room, rIndex) => {
+                    if (rIndex === globalIdx) {
+                        const newGuests = room.guests.map((guest, guestIndex) => {
+                            if (guestIndex === gIdx) {
+                                const updatedGuest = { ...guest, [field]: value };
+                                if (field === 'name' && isInternationalRooming) {
+                                    if (!guest.engName || guest.engName === koreanToEnglish(guest.name)) {
+                                        updatedGuest.engName = koreanToEnglish(value);
+                                    }
+                                }
+                                if (field === 'engName') updatedGuest.engName = String(value).toUpperCase();
+                                return updatedGuest;
+                            }
+                            return guest;
+                        });
+                        return { ...room, guests: newGuests };
                     }
-                }
-                if (field === 'engName') newRooms[rIdx].guests[gIdx].engName = String(value).toUpperCase();
-                
-                setRooms(newRooms);
+                    return room;
+                }));
             };
-            const changeRoomType = (rIdx, type) => {
-                const newRooms = [...rooms];
-                newRooms[rIdx].type = type;
-                const capacity = type === 'SINGLE' ? 1 : (type === 'TWIN' ? 2 : (type === 'TRIPLE' ? 3 : 4));
-                let currentGuests = [...newRooms[rIdx].guests];
-                if (currentGuests.length < capacity) {
-                    while(currentGuests.length < capacity) currentGuests.push({ name: "", engName: "", gender: "남", remark: "" });
-                } else {
-                    currentGuests = currentGuests.slice(0, capacity);
-                }
-                newRooms[rIdx].guests = currentGuests;
-                setRooms(newRooms);
+
+            const changeRoomType = (globalIdx, type) => {
+                setRooms(prev => prev.map((room, rIndex) => {
+                    if (rIndex === globalIdx) {
+                        const capacity = type === 'SINGLE' ? 1 : (type === 'TWIN' ? 2 : (type === 'TRIPLE' ? 3 : 4));
+                        let currentGuests = [...room.guests];
+                        if (currentGuests.length < capacity) {
+                            while(currentGuests.length < capacity) currentGuests.push({ name: "", engName: "", gender: "남", remark: "" });
+                        } else {
+                            currentGuests = currentGuests.slice(0, capacity);
+                        }
+                        return { ...room, type, guests: currentGuests };
+                    }
+                    return room;
+                }));
             };
-            const removeRoom = (rIdx) => setRooms(rooms.filter((_, i) => i !== rIdx));
-            const addRoom = () => setRooms([...rooms, { id: Date.now() + Math.random(), roomNo: '', type: 'TWIN', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }]);
+
+            const removeRoom = (globalIdx) => setRooms(prev => prev.filter((_, idx) => idx !== globalIdx));
+            const addRoom = () => setRooms(prev => [...prev, { id: Date.now() + Math.random(), roomNo: '', type: 'TWIN', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }]);
 
             const handleRoomingFileUpload = async (e) => {
                 const file = e.target.files[0];
@@ -347,11 +364,10 @@
                             if(extractedNames[i+1]) guests.push({ name: extractedNames[i+1], engName: koreanToEnglish(extractedNames[i+1]), gender: "남", remark: "" });
                             newRooms.push({ id: newRooms.length+1, type: guests.length===1 ? 'SINGLE' : 'TWIN', roomNo: '', guests });
                         }
-                        if (rooms.length === 1 && rooms[0].guests.every(g => g.name === "")) {
-                            setRooms(newRooms);
-                        } else {
-                            setRooms([...rooms, ...newRooms]);
-                        }
+                        setRooms(prev => {
+                            if (prev.length === 1 && prev[0].guests.every(g => g.name === "")) return newRooms;
+                            return [...prev, ...newRooms];
+                        });
                         alert("✅ 업로드하신 PDF에서 방 배정 인원을 성공적으로 추출했습니다.\n\n⚠️ 인식 오류가 있을 수 있으니 표에 반영된 이름을 꼭 확인해 주세요!");
                     } else {
                         alert("⚠️ 명단을 찾을 수 없습니다.");
@@ -361,7 +377,7 @@
             };
 
             // ==========================================
-            // [데이터 저장/불러오기 및 공유 링크 생성]
+            // [데이터 저장/불러오기 및 안전한 공유 링크 복사]
             // ==========================================
             const exportData = () => {
                 const dataToSave = { travelers, commonHeader, rooms };
@@ -395,23 +411,25 @@
                 e.target.value = '';
             };
 
-            const handleCopyLink = async () => {
+            // 클립보드 보안 에러(NotAllowedError) 우회 완벽 적용
+            const handleCopyLink = () => {
                 const baseUrl = window.location.origin + window.location.pathname;
                 const shareUrl = `${baseUrl}?shared=true`;
-                let linkToCopy = shareUrl;
                 
-                try {
-                    const res = await fetch(`https://is.gd/create.php?format=json&url=${encodeURIComponent(shareUrl)}`);
-                    const data = await res.json();
-                    if (data.shorturl) {
-                        linkToCopy = data.shorturl;
-                    }
-                } catch (e) {
-                    console.log("단축 링크 생성 실패, 원본 링크로 진행합니다.");
-                }
+                fetch(`https://is.gd/create.php?format=json&url=${encodeURIComponent(shareUrl)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        const finalUrl = data.shorturl || shareUrl;
+                        executeCopy(finalUrl);
+                    })
+                    .catch(() => {
+                        executeCopy(shareUrl);
+                    });
+            };
 
+            const executeCopy = (urlToCopy) => {
                 const textArea = document.createElement("textarea");
-                textArea.value = linkToCopy;
+                textArea.value = urlToCopy;
                 textArea.style.position = "fixed";
                 textArea.style.top = "-9999px";
                 textArea.style.left = "-9999px";
@@ -422,12 +440,12 @@
                 try {
                     const successful = document.execCommand('copy');
                     if(successful) {
-                        alert(`✅ 담당자 공유용 단축 링크(${linkToCopy})가 복사되었습니다!\n이 링크로 접속하면 불필요한 기능(저장/복사버튼 등)이 사라진 '심플 작성 모드'로 열립니다.`);
+                        alert(`✅ 담당자 공유용 단축 링크(${urlToCopy})가 복사되었습니다!\n이 링크로 접속하면 불필요한 기능(저장/복사버튼 등)이 사라진 '심플 작성 모드'로 열립니다.`);
                     } else {
-                        prompt("브라우저 정책으로 자동 복사에 실패했습니다. 아래 주소를 직접 복사(Ctrl+C)해 주세요:", linkToCopy);
+                        prompt("브라우저 정책으로 자동 복사에 실패했습니다. 아래 주소를 직접 복사(Ctrl+C)해 주세요:", urlToCopy);
                     }
                 } catch (err) {
-                    prompt("브라우저 정책으로 자동 복사에 실패했습니다. 아래 주소를 직접 복사(Ctrl+C)해 주세요:", linkToCopy);
+                    prompt("브라우저 정책으로 자동 복사에 실패했습니다. 아래 주소를 직접 복사(Ctrl+C)해 주세요:", urlToCopy);
                 } finally {
                     document.body.removeChild(textArea);
                 }
@@ -521,7 +539,7 @@
                                             <span className="text-[11px] md:text-sm font-black text-slate-700 whitespace-nowrap">총 <span className="text-blue-600 text-base md:text-lg">{travelers.length}</span> 명</span>
                                         </div>
                                     </div>
-                                    <p className="text-[10px] md:text-xs font-bold text-red-500 leading-relaxed"><i className="fas fa-exclamation-circle mr-1"></i> 한글 이름을 입력하면 영문명이 자동으로 변환됩니다. 단, 실제 여권상의 영문 스펠링과 상이할 수 있으므로 반드시 재확인 및 수정 바랍니다.</p>
+                                    <p className="text-[10px] md:text-[12px] font-bold text-red-600 leading-relaxed"><i className="fas fa-exclamation-circle mr-1"></i> 한글 이름을 입력하면 영문명이 자동으로 변환됩니다. 단, 실제 여권상의 영문 스펠링과 상이할 수 있으므로 반드시 재확인 및 수정 바랍니다.</p>
                                     <p className="text-[10px] text-blue-600 font-bold block md:hidden mt-1"><i className="fas fa-arrows-alt-h mr-1"></i> 모바일에서는 표를 좌우로 스크롤하여 작성하세요.</p>
                                 </div>
 
@@ -636,7 +654,7 @@
                         <div className={activeMainTab === 'rooming' ? 'block' : 'hidden'}>
                             <div className="max-w-[1100px] mx-auto p-0 sm:p-4 md:p-6 print-rooming-list">
                                 
-                                {/* 공유 모드일 경우 복잡한 가이드 및 버튼 숨김, 가장 심플한 형태로 제공 */}
+                                {/* 공유 모드일 경우 복잡한 가이드 및 버튼 숨김 */}
                                 {(!isSharedMode && isNavMenuOpen) && (
                                     <div className="no-print mb-4 md:mb-6">
                                         <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm inline-flex mb-3 md:mb-4 w-full sm:w-auto">
@@ -719,9 +737,9 @@
                                                                         <span className="text-[9px] md:text-[10px] text-slate-500">( 남 {roomStats.male}명 / 여 {roomStats.female}명 )</span>
                                                                     </div>
                                                                     <div className="flex items-center gap-1.5 ml-0 sm:ml-2">
-                                                                        <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">SGL: {roomStats.roomCounts.SINGLE}</span>
                                                                         <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200">TWN: {roomStats.roomCounts.TWIN}</span>
                                                                         <span className="bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200">TRP: {roomStats.roomCounts.TRIPLE}</span>
+                                                                        <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">SGL: {roomStats.roomCounts.SINGLE}</span>
                                                                         {roomStats.roomCounts.QUAD > 0 && <span className="bg-violet-50 text-violet-700 px-1.5 py-0.5 rounded border border-violet-200">QAD: {roomStats.roomCounts.QUAD}</span>}
                                                                     </div>
                                                                 </div>
@@ -734,7 +752,13 @@
                                                     </div>
 
                                                     <div className="flex justify-between items-center mb-2 md:mb-3 gap-2">
-                                                        {isInternationalRooming ? <p className="text-[9px] md:text-[11px] font-bold text-red-500 no-print"><i className="fas fa-exclamation-circle mr-1"></i> 자동 변환된 영문명은 실제 여권과 상이할 수 있으므로 반드시 재확인 바랍니다.</p> : <div></div>}
+                                                        {isInternationalRooming ? <p className="text-[9px] md:text-[12px] font-bold text-red-600 no-print"><i className="fas fa-exclamation-circle mr-1"></i> 한글 입력 시 자동 변환된 영문명은 실제 여권과 상이할 수 있으므로 반드시 재확인 바랍니다.</p> : <div></div>}
+                                                        <div className="flex flex-wrap gap-1 md:gap-2 text-[9px] md:text-[10px] font-bold text-slate-600 no-print">
+                                                            {roomStats.roomCounts.TWIN > 0 && <span className="bg-blue-50 text-blue-700 px-1.5 md:px-2 py-1 rounded border border-blue-100">TWN: {roomStats.roomCounts.TWIN}</span>}
+                                                            {roomStats.roomCounts.TRIPLE > 0 && <span className="bg-amber-50 text-amber-700 px-1.5 md:px-2 py-1 rounded border border-amber-100">TRP: {roomStats.roomCounts.TRIPLE}</span>}
+                                                            {roomStats.roomCounts.SINGLE > 0 && <span className="bg-emerald-50 text-emerald-700 px-1.5 md:px-2 py-1 rounded border border-emerald-100">SGL: {roomStats.roomCounts.SINGLE}</span>}
+                                                            {roomStats.roomCounts.QUAD > 0 && <span className="bg-violet-50 text-violet-700 px-1.5 md:px-2 py-1 rounded border border-violet-100">QAD: {roomStats.roomCounts.QUAD}</span>}
+                                                        </div>
                                                     </div>
 
                                                     {/* 방배정 테이블: 모바일에서는 스크롤 가능하도록 table-wrapper 추가 */}
@@ -830,7 +854,7 @@
                             <div className="flex flex-col items-center justify-center bg-slate-50 border-r border-slate-100 py-1">
                                 <span className="text-[10px] md:text-[11px] font-black text-slate-800">{actualIdx + 1}</span>
                                 <select className="no-print mt-0.5 text-[7px] md:text-[8px] font-bold text-slate-400 bg-transparent outline-none cursor-pointer" value={room.type} onChange={(e) => changeRoomType(globalIdx, e.target.value)}>
-                                    <option value="SINGLE">SGL</option><option value="TWIN">TWN</option><option value="TRIPLE">TRP</option><option value="QUAD">QUAD</option>
+                                    <option value="TWIN">TWN</option><option value="TRIPLE">TRP</option><option value="SINGLE">SGL</option><option value="QUAD">QUAD</option>
                                 </select>
                             </div>
                             
@@ -845,7 +869,7 @@
                                             <input className="flex-1 min-w-[30px] text-[9px] md:text-[10px] text-slate-500 outline-none bg-transparent editable-cell-input" placeholder="비고" value={g.remark} onChange={(e) => updateGuest(globalIdx, gIdx, 'remark', e.target.value)} />
                                         </div>
                                         {isInternational && (
-                                            <input className="text-[9px] md:text-[10px] font-medium tracking-wide text-slate-400 outline-none uppercase bg-transparent w-full editable-cell-input" placeholder="ENGLISH NAME" value={g.engName} onChange={(e) => updateGuest(globalIdx, gIdx, 'engName', e.target.value.toUpperCase())} />
+                                            <input className="text-[9px] md:text-[10px] font-medium tracking-wide text-slate-400 outline-none uppercase bg-transparent w-full editable-cell-input" placeholder="ENGLISH NAME" value={g.engName} onChange={(e) => updateGuest(globalIdx, gIdx, 'engName', e.target.value)} />
                                         )}
                                     </div>
                                 ))}
