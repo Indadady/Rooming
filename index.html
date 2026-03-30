@@ -72,12 +72,12 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useMemo } = React;
 
         // --- 한글 -> 영문 변환기 ---
         const koreanToEnglish = (name) => {
             if (!name) return "";
-            const fNames = {"김":"KIM", "이":"LEE", "박":"PARK", "최":"CHOI", "정":"JUNG", "강":"KANG", "조":"CHO", "윤":"YOON", "장":"JANG", "임":"LIM", "홍":"HONG"};
+            const fNames = {"김":"KIM", "이":"LEE", "박":"PARK", "최":"CHOI", "정":"JUNG", "강":"KANG", "조":"CHO", "윤":"YOON", "장":"JANG", "임":"LIM", "홍":"HONG", "송":"SONG", "오":"OH", "서":"SEO", "신":"SHIN", "권":"KWON", "황":"HWANG", "안":"AHN", "유":"YOO", "전":"JEON", "배":"BAE", "고":"KO", "문":"MOON", "양":"YANG", "손":"SON", "백":"BAEK", "허":"HEO", "남":"NAM"};
             const char1 = name.charAt(0);
             const rest = name.slice(1);
             const engFamily = fNames[char1] || "KOREAN";
@@ -96,11 +96,31 @@
             });
 
             const [rooms, setRooms] = useState([
-                { id: 1, type: 'TWIN', guests: [{name:"참가자1", engName:"GUEST ONE", gender:"남"}, {name:"참가자2", engName:"GUEST TWO", gender:"남"}] },
-                { id: 2, type: 'TWIN', guests: [{name:"참가자3", engName:"GUEST THREE", gender:"여"}, {name:"참가자4", engName:"GUEST FOUR", gender:"여"}] },
-                { id: 3, type: 'SINGLE', guests: [{name:"인솔자", engName:"TOUR LEADER", gender:"남"}] }
+                { id: 1, type: 'TWIN', roomNo: '', guests: [{name:"참가자1", engName:"GUEST ONE", gender:"남", remark:""}, {name:"참가자2", engName:"GUEST TWO", gender:"남", remark:""}] },
+                { id: 2, type: 'TWIN', roomNo: '', guests: [{name:"참가자3", engName:"GUEST THREE", gender:"여", remark:""}, {name:"참가자4", engName:"GUEST FOUR", gender:"여", remark:""}] },
+                { id: 3, type: 'SINGLE', roomNo: '', guests: [{name:"인솔자", engName:"TOUR LEADER", gender:"남", remark:"금연객실 요청"}] }
             ]);
             const [importText, setImportText] = useState("");
+
+            // --- 요약 통계 자동 계산 (투어메이커 실무용) ---
+            const stats = useMemo(() => {
+                let total = 0, male = 0, female = 0;
+                let roomCounts = { SINGLE: 0, TWIN: 0, TRIPLE: 0, QUAD: 0 };
+                
+                rooms.forEach(r => {
+                    if (r.guests.some(g => g.name.trim() !== "")) {
+                        roomCounts[r.type]++;
+                    }
+                    r.guests.forEach(g => {
+                        if (g.name.trim() !== "") {
+                            total++;
+                            if (g.gender === '남') male++;
+                            if (g.gender === '여') female++;
+                        }
+                    });
+                });
+                return { total, male, female, roomCounts };
+            }, [rooms]);
 
             // --- 비즈니스 로직 ---
             const handleSmartImport = () => {
@@ -108,7 +128,7 @@
                 
                 const lines = importText.split('\n').filter(l => l.trim().length > 0);
                 const newRooms = lines.map((line, idx) => {
-                    const rawNames = line.split(/[,/]+|(?<=[가-힣])\s+(?=[가-힣])/).filter(n => n.trim().length >= 1);
+                    const rawNames = line.split(/[,/]+|(?<=[가-힣a-zA-Z])\s+(?=[가-힣a-zA-Z])/).filter(n => n.trim().length >= 1);
                     
                     const guests = rawNames.map(raw => {
                         const hasFemale = raw.includes('(여)') || raw.includes('여');
@@ -116,7 +136,8 @@
                         return {
                             name: name,
                             engName: isInternational ? koreanToEnglish(name) : "",
-                            gender: hasFemale ? "여" : "남"
+                            gender: hasFemale ? "여" : "남",
+                            remark: ""
                         };
                     });
 
@@ -131,6 +152,12 @@
                 setRooms(newRooms);
                 setImportText("");
                 setShowGuide(false);
+            };
+
+            const updateRoom = (rIdx, field, value) => {
+                const newRooms = [...rooms];
+                newRooms[rIdx][field] = value;
+                setRooms(newRooms);
             };
 
             const updateGuest = (rIdx, gIdx, field, value) => {
@@ -150,7 +177,7 @@
                 
                 let currentGuests = [...newRooms[rIdx].guests];
                 if (currentGuests.length < capacity) {
-                    while(currentGuests.length < capacity) currentGuests.push({ name: "", engName: "", gender: "남" });
+                    while(currentGuests.length < capacity) currentGuests.push({ name: "", engName: "", gender: "남", remark: "" });
                 } else {
                     currentGuests = currentGuests.slice(0, capacity);
                 }
@@ -161,7 +188,7 @@
             const removeRoom = (rIdx) => setRooms(rooms.filter((_, i) => i !== rIdx));
             
             const addRoom = () => {
-                setRooms([...rooms, { id: rooms.length + 1, type: 'TWIN', guests: [{name:"", engName:"", gender:"남"}, {name:"", engName:"", gender:"남"}] }]);
+                setRooms([...rooms, { id: rooms.length + 1, roomNo: '', type: 'TWIN', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }]);
             };
 
             const handleFileUpload = async (e) => {
@@ -218,8 +245,8 @@
                 alert("💡 안내: 명단 작성이 완료되셨나요?\n\n상단의 [인쇄 / PDF 저장] 버튼을 눌러 문서를 PDF로 저장하신 후,\n담당 투어메이커 직원에게 메일이나 카카오톡으로 전달해 주시면 감사하겠습니다!");
             };
 
-            // --- 페이징 처리 로직 (1페이지당 40객실 - 밀도 높임) ---
-            const ROOMS_PER_PAGE = 40;
+            // --- 페이징 처리 로직 (1페이지당 35객실로 약간 조정 - 비고란 등 높이 감안) ---
+            const ROOMS_PER_PAGE = 35;
             const pages = [];
             const totalPages = Math.max(1, Math.ceil(rooms.length / ROOMS_PER_PAGE));
             for (let i = 0; i < totalPages; i++) {
@@ -328,12 +355,20 @@
                                         
                                         <div>
                                             {/* Header - 매우 컴팩트하게 축소 */}
-                                            <div className="flex flex-col md:flex-row justify-between items-end border-b-2 border-slate-800 pb-2 mb-4 gap-4">
+                                            <div className="flex flex-col md:flex-row justify-between items-end border-b-2 border-slate-800 pb-2 mb-3 gap-4">
                                                 <div className="space-y-1.5 flex-1 min-w-0 w-full mt-1">
                                                     <HeaderField label="GROUP" val={headerInfo.groupName} onChange={(v) => setHeaderInfo({...headerInfo, groupName: v})} isMain={true} placeholder="행사명을 입력하세요" />
                                                     <HeaderField label="DATE" val={headerInfo.date} onChange={(v) => setHeaderInfo({...headerInfo, date: v})} placeholder="기간 입력" />
                                                     <HeaderField label="LOCATION" val={headerInfo.location} onChange={(v) => setHeaderInfo({...headerInfo, location: v})} placeholder="지역 입력" />
-                                                    <HeaderField label="TOTAL PAX" val={headerInfo.numberDesc} onChange={(v) => setHeaderInfo({...headerInfo, numberDesc: v})} placeholder="인원 입력" />
+                                                    
+                                                    {/* 자동 요약 데이터로 교체된 인원 표시란 */}
+                                                    <div className="flex items-center group w-full">
+                                                        <span className="w-20 md:w-24 text-[9px] font-black text-slate-500 tracking-widest uppercase flex-shrink-0">TOTAL PAX</span>
+                                                        <div className="text-xs font-bold text-slate-800 flex-1 flex items-center gap-3">
+                                                            <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">총 인원: <span className="text-blue-600">{stats.total}</span>명</span>
+                                                            <span className="text-[10px] text-slate-500">( 남 {stats.male}명 / 여 {stats.female}명 )</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                                 <div className="text-right flex-shrink-0 flex flex-col items-end">
                                                     <h2 className="text-2xl md:text-3xl font-black italic tracking-tighter text-slate-800 leading-none">ROOMING LIST</h2>
@@ -341,19 +376,29 @@
                                                 </div>
                                             </div>
 
-                                            {isInternational && (
-                                                <div className="mb-3 p-2 bg-blue-50 rounded border border-blue-100 no-print flex items-center justify-between">
-                                                    <p className="text-[11px] font-bold text-blue-800 flex items-center gap-1.5">
-                                                        <i className="fas fa-circle-exclamation"></i> 
-                                                        자동 변환된 영문명은 여권 스펠링과 다를 수 있으니, 투어메이커 제출 전 꼭 확인 부탁드립니다.
-                                                    </p>
+                                            <div className="flex flex-col md:flex-row justify-between items-center mb-3 gap-2">
+                                                {isInternational ? (
+                                                    <div className="w-full md:w-auto p-1.5 px-3 bg-blue-50 rounded border border-blue-100 no-print">
+                                                        <p className="text-[11px] font-bold text-blue-800 flex items-center gap-1.5">
+                                                            <i className="fas fa-circle-exclamation"></i> 
+                                                            자동 변환된 영문명은 여권 스펠링과 다를 수 있으니 꼭 확인 부탁드립니다.
+                                                        </p>
+                                                    </div>
+                                                ) : <div></div>}
+                                                
+                                                {/* 룸타입 요약 (여행사 실무용) */}
+                                                <div className="flex gap-2 text-[10px] font-bold text-slate-600 no-print">
+                                                    {stats.roomCounts.SINGLE > 0 && <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded border border-emerald-100">SGL: {stats.roomCounts.SINGLE}</span>}
+                                                    {stats.roomCounts.TWIN > 0 && <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-100">TWN: {stats.roomCounts.TWIN}</span>}
+                                                    {stats.roomCounts.TRIPLE > 0 && <span className="bg-amber-50 text-amber-700 px-2 py-1 rounded border border-amber-100">TRP: {stats.roomCounts.TRIPLE}</span>}
+                                                    {stats.roomCounts.QUAD > 0 && <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded border border-purple-100">QUAD: {stats.roomCounts.QUAD}</span>}
                                                 </div>
-                                            )}
+                                            </div>
 
-                                            {/* Tables - 높이 및 패딩 최소화로 밀집도 상향 */}
+                                            {/* Tables - 비율 조정 (룸 번호 칸 확대 및 공백 활용) */}
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                                                <RoomTable rooms={leftTableRooms} startIndex={pageStartIndex} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} isInternational={isInternational} />
-                                                <RoomTable rooms={rightTableRooms} startIndex={pageStartIndex + leftTableRooms.length} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} isInternational={isInternational} />
+                                                <RoomTable rooms={leftTableRooms} startIndex={pageStartIndex} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} isInternational={isInternational} />
+                                                <RoomTable rooms={rightTableRooms} startIndex={pageStartIndex + leftTableRooms.length} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} isInternational={isInternational} />
                                             </div>
                                         </div>
 
@@ -395,21 +440,24 @@
             </div>
         );
 
-        const RoomTable = ({ rooms, startIndex, updateGuest, changeRoomType, removeRoom, isInternational }) => (
+        // --- RoomTable 컴포넌트 비율 변경 및 비고/방번호 입력란 추가 ---
+        const RoomTable = ({ rooms, startIndex, updateRoom, updateGuest, changeRoomType, removeRoom, isInternational }) => (
             <div className="border-t-[2px] border-slate-800 room-table-container">
-                <div className="grid grid-cols-[35px_1fr_50px] bg-slate-100 border-b border-slate-300 text-[9px] font-black py-1.5 px-1 text-center uppercase tracking-widest text-slate-600">
+                {/* Grid 변경: 방번호 80px -> 100px로 확장, 이름/비고 영역을 1fr로 유연하게 설정 */}
+                <div className="grid grid-cols-[40px_1fr_100px] bg-slate-100 border-b border-slate-300 text-[9px] font-black py-1.5 px-1 text-center uppercase tracking-widest text-slate-600">
                     <div>No</div>
-                    <div>Guest</div>
-                    <div>Room</div>
+                    <div>Guest Info</div>
+                    <div>Room No</div>
                 </div>
                 {rooms.map((room, rIdx) => {
                     const actualIdx = startIndex + rIdx;
                     return (
-                        <div key={actualIdx} className="flex border-b border-slate-200 group relative min-h-[36px]">
-                            <div className="w-[35px] flex flex-col items-center justify-center bg-slate-50 border-r border-slate-100 py-1">
+                        <div key={actualIdx} className="grid grid-cols-[40px_1fr_100px] border-b border-slate-200 group relative min-h-[40px]">
+                            {/* 룸 인덱스 & 타입 */}
+                            <div className="flex flex-col items-center justify-center bg-slate-50 border-r border-slate-100 py-1">
                                 <span className="text-[11px] font-black text-slate-800">{actualIdx + 1}</span>
                                 <select 
-                                    className="no-print mt-0.5 text-[8px] font-bold text-slate-400 bg-transparent border-none outline-none cursor-pointer hover:text-blue-600 p-0"
+                                    className="no-print mt-0.5 text-[8px] font-bold text-slate-400 bg-transparent border-none outline-none cursor-pointer hover:text-blue-600 p-0 text-center"
                                     value={room.type} onChange={(e) => changeRoomType(actualIdx, e.target.value)}>
                                     <option value="SINGLE">SGL</option>
                                     <option value="TWIN">TWN</option>
@@ -417,21 +465,29 @@
                                     <option value="QUAD">QUAD</option>
                                 </select>
                             </div>
-                            <div className="flex-grow py-0.5">
+                            
+                            {/* 게스트 정보 (이름, 성별, 비고, 영문명) */}
+                            <div className="flex flex-col py-0.5">
                                 {room.guests.map((g, gIdx) => (
-                                    <div key={gIdx} className={`flex flex-col px-2 py-0.5 ${gIdx > 0 ? 'border-t border-slate-100' : ''}`}>
-                                        <div className="flex items-center gap-1.5 mb-0">
+                                    <div key={gIdx} className={`flex flex-col px-2 py-1 ${gIdx > 0 ? 'border-t border-slate-100' : ''}`}>
+                                        <div className="flex items-center gap-2 mb-0.5 w-full">
+                                            {/* 이름 칸 넓힘 (w-16 -> w-24) */}
                                             <input 
-                                                className="w-16 font-bold text-xs outline-none bg-transparent focus:text-blue-600" 
-                                                value={g.name} placeholder="이름" onChange={(e) => updateGuest(actualIdx, gIdx, 'name', e.target.value)}
+                                                className="w-20 md:w-24 font-bold text-xs outline-none bg-transparent focus:text-blue-600" 
+                                                value={g.name} placeholder="이름 입력" onChange={(e) => updateGuest(actualIdx, gIdx, 'name', e.target.value)}
                                             />
                                             <button 
                                                 onClick={() => updateGuest(actualIdx, gIdx, 'gender', g.gender === '남' ? '여' : '남')}
-                                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded outline-none border-none cursor-pointer transition-colors ${g.gender === '여' ? 'bg-pink-50 text-pink-600 hover:bg-pink-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
+                                                className={`flex-shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded outline-none border-none cursor-pointer transition-colors ${g.gender === '여' ? 'bg-pink-50 text-pink-600 hover:bg-pink-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
                                                 title="클릭하여 성별 전환"
                                             >
                                                 {g.gender}
                                             </button>
+                                            {/* 남는 공백을 비고란으로 활용 */}
+                                            <input 
+                                                className="flex-1 min-w-0 text-[10px] text-slate-500 outline-none bg-transparent border-b border-dashed border-transparent hover:border-slate-300 focus:border-blue-400" 
+                                                placeholder="비고 또는 특이사항" value={g.remark} onChange={(e) => updateGuest(actualIdx, gIdx, 'remark', e.target.value)}
+                                            />
                                         </div>
                                         {isInternational && (
                                             <input 
@@ -442,12 +498,21 @@
                                     </div>
                                 ))}
                             </div>
-                            <div className="w-[50px] border-l border-slate-100 flex items-center justify-center relative">
-                                <span className="text-[9px] text-slate-300 font-medium italic absolute top-1/2 -translate-y-1/2">추후 배정</span>
+                            
+                            {/* 룸 번호 칸 (너비 확장 및 직접 입력 가능) */}
+                            <div className="border-l border-slate-100 flex items-center justify-center p-1">
+                                <input 
+                                    className="w-full text-center text-[11px] font-bold text-slate-600 bg-transparent outline-none border-b border-transparent focus:border-slate-300 focus:text-blue-600 placeholder:text-[9px] placeholder:italic placeholder:font-normal placeholder:text-slate-300"
+                                    placeholder="추후 배정" 
+                                    value={room.roomNo} 
+                                    onChange={(e) => updateRoom(actualIdx, 'roomNo', e.target.value)}
+                                />
                             </div>
+                            
+                            {/* 삭제 버튼 */}
                             <button 
                                 onClick={() => removeRoom(actualIdx)}
-                                className="no-print absolute -left-6 top-1/2 -translate-y-1/2 p-1 bg-white shadow-sm border border-slate-200 rounded-full text-slate-400 hover:text-red-500 hover:border-red-200 transition opacity-0 group-hover:opacity-100"
+                                className="no-print absolute -left-6 top-1/2 -translate-y-1/2 p-1 bg-white shadow-sm border border-slate-200 rounded-full text-slate-400 hover:text-red-500 hover:border-red-200 transition opacity-0 group-hover:opacity-100 z-10"
                             >
                                 <i className="fas fa-trash-alt text-[10px]"></i>
                             </button>
