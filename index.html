@@ -63,10 +63,8 @@
             .print-page { 
                 page-break-after: always; 
                 break-inside: avoid !important;
-                height: 280mm !important; /* A4 용지 규격에 딱 맞춤 */
                 display: flex !important;
                 flex-direction: column !important;
-                justify-content: space-between !important; /* 푸터를 바닥으로 밀어냄 */
             }
             
             .print-page:last-child { 
@@ -106,11 +104,9 @@
             const fNames = {"김":"KIM", "이":"LEE", "박":"PARK", "최":"CHOI", "정":"JUNG", "강":"KANG", "조":"CHO", "윤":"YOON", "장":"JANG", "임":"LIM", "홍":"HONG", "송":"SONG", "오":"OH", "서":"SEO", "신":"SHIN", "권":"KWON", "황":"HWANG", "안":"AHN", "유":"YOO", "전":"JEON", "배":"BAE", "고":"KO", "문":"MOON", "양":"YANG", "손":"SON", "백":"BAEK", "허":"HEO", "남":"NAM", "심":"SHIM", "노":"NOH", "하":"HA", "곽":"KWAK", "성":"SUNG", "차":"CHA", "주":"JOO", "우":"WOO", "구":"KOO", "나":"NA", "민":"MIN", "엄":"EOM", "채":"CHAE", "원":"WON", "방":"BANG", "공":"KONG"};
             
             const char1 = name.charAt(0);
-            // 등록된 성씨가 없으면 성씨도 로마자 엔진으로 자동 변환
             const engFamily = fNames[char1] || getRomanization(char1);
 
             let engGiven = "";
-            // 나머지 이름(이름 본문)을 한 글자씩 로마자로 변환
             for(let i = 1; i < name.length; i++) {
                 engGiven += getRomanization(name.charAt(i));
             }
@@ -135,7 +131,7 @@
             ]);
             const [importText, setImportText] = useState("");
 
-            // --- 요약 통계 자동 계산 (투어메이커 실무용) ---
+            // --- 요약 통계 자동 계산 ---
             const stats = useMemo(() => {
                 let total = 0, male = 0, female = 0;
                 let roomCounts = { SINGLE: 0, TWIN: 0, TRIPLE: 0, QUAD: 0 };
@@ -197,7 +193,6 @@
                 const newRooms = [...rooms];
                 newRooms[rIdx].guests[gIdx][field] = value;
                 
-                // 버그 수정: 이름 입력 시마다 실시간으로 영문명 덮어쓰기 (첫 글자 멈춤 현상 해결)
                 if (field === 'name' && isInternational) {
                     newRooms[rIdx].guests[gIdx].engName = koreanToEnglish(value);
                 }
@@ -281,7 +276,7 @@
                         
                         setImportText(resultText.trim());
                         setActiveTab('text');
-                        alert("✅ 작성하신 양식에서 '이름'만 성공적으로 추출했습니다!\n\n💡 표의 생김새(다단 구조 등)와 상관없이 한글 이름만 똑똑하게 찾아내어 2인 1실 기준으로 정렬해 드렸습니다.\n\n이 텍스트 창에서 줄바꿈(엔터)을 수정하여 3인실이나 1인실을 정리하신 후 [명단 일괄 자동 배정]을 눌러주세요.");
+                        alert("✅ 작성하신 양식에서 '이름'만 성공적으로 추출했습니다!\n\n💡 텍스트 창에서 줄바꿈(엔터)을 수정하여 3인실이나 1인실을 정리하신 후 [명단 일괄 자동 배정]을 눌러주세요.");
                     } else {
                         alert("⚠️ PDF에서 명단을 찾을 수 없습니다.\n(이미지 스캔본이거나 폰트를 읽을 수 없는 형식일 수 있습니다.)");
                     }
@@ -296,8 +291,8 @@
                 alert("💡 안내: 명단 작성이 완료되셨나요?\n\n상단의 [인쇄 / PDF 저장] 버튼을 눌러 문서를 PDF로 저장하신 후,\n담당 투어메이커 직원에게 메일이나 카카오톡으로 전달해 주시면 감사하겠습니다!");
             };
 
-            // --- 페이징 처리 로직 (절대 넘치지 않도록 안정성을 위해 1페이지당 26객실로 하향 조정) ---
-            const ROOMS_PER_PAGE = 26;
+            // --- 페이징 처리 로직 (겹침 방지를 위해 1페이지당 22객실로 하향 안정화) ---
+            const ROOMS_PER_PAGE = 22;
             const pages = [];
             const totalPages = Math.max(1, Math.ceil(rooms.length / ROOMS_PER_PAGE));
             for (let i = 0; i < totalPages; i++) {
@@ -402,11 +397,11 @@
                                 const pageStartIndex = pageIndex * ROOMS_PER_PAGE;
 
                                 return (
-                                    <div key={pageIndex} className="print-page bg-white shadow-lg p-5 md:p-8 border-t-[6px] border-slate-800 print:shadow-none print:p-0 print:border-none print:m-0 relative flex flex-col justify-between" style={{ minHeight: '280mm' }}>
+                                    <div key={pageIndex} className="print-page bg-white shadow-lg p-5 md:p-8 border-t-[6px] border-slate-800 print:shadow-none print:p-0 print:border-none print:m-0 relative flex flex-col justify-between" style={{ minHeight: '277mm' }}>
                                         
                                         <div className="flex-1 flex flex-col">
-                                            {/* Header */}
-                                            <div className="flex flex-col md:flex-row justify-between items-end border-b-2 border-slate-800 pb-2 mb-3 gap-4">
+                                            {/* Header - 인쇄 시에도 flex-row 강제 유지 */}
+                                            <div className="flex flex-col md:flex-row print:flex-row justify-between items-end border-b-2 border-slate-800 pb-2 mb-3 gap-4">
                                                 <div className="space-y-1.5 flex-1 min-w-0 w-full mt-1">
                                                     <HeaderField label="GROUP" val={headerInfo.groupName} onChange={(v) => setHeaderInfo({...headerInfo, groupName: v})} isMain={true} placeholder="행사명을 입력하세요" />
                                                     <HeaderField label="DATE" val={headerInfo.date} onChange={(v) => setHeaderInfo({...headerInfo, date: v})} placeholder="기간 입력" />
@@ -421,13 +416,13 @@
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div className="text-right flex-shrink-0 flex flex-col items-end">
+                                                <div className="text-right flex-shrink-0 flex flex-col items-end print:text-right">
                                                     <h2 className="text-2xl md:text-3xl font-black italic tracking-tighter text-slate-800 leading-none">ROOMING LIST</h2>
                                                     {totalPages > 1 && <span className="text-[10px] font-bold text-slate-400 mt-1">Page {pageIndex + 1} / {totalPages}</span>}
                                                 </div>
                                             </div>
 
-                                            <div className="flex flex-col md:flex-row justify-between items-center mb-3 gap-2">
+                                            <div className="flex flex-col md:flex-row print:flex-row justify-between items-center mb-3 gap-2">
                                                 {isInternational ? (
                                                     <div className="w-full md:w-auto p-1.5 px-3 bg-blue-50 rounded border border-blue-100 no-print">
                                                         <p className="text-[11px] font-bold text-blue-800 flex items-center gap-1.5">
@@ -446,18 +441,16 @@
                                                 </div>
                                             </div>
 
-                                            {/* Tables */}
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                                            {/* Tables - 인쇄 시에도 grid-cols-2 강제 유지 */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 print:grid-cols-2 gap-x-8 gap-y-4">
                                                 <RoomTable rooms={leftTableRooms} startIndex={pageStartIndex} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} isInternational={isInternational} />
                                                 <RoomTable rooms={rightTableRooms} startIndex={pageStartIndex + leftTableRooms.length} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} isInternational={isInternational} />
                                             </div>
                                             
-                                            {/* 인원이 적을 때 메모/특이사항 공간으로 자연스럽게 쓰이는 빈 공간 (flex-grow 역할) */}
-                                            <div className="flex-1"></div>
                                         </div>
 
-                                        {/* Footer Area - 절대 바닥 고정 */}
-                                        <div className="mt-6 pt-3 border-t border-slate-200 flex flex-col items-end">
+                                        {/* Footer Area - mt-auto 적용으로 표 내용이 적어도 무조건 바닥 끝으로 고정됨 */}
+                                        <div className="mt-auto pt-3 border-t border-slate-200 flex flex-col items-end print:mt-auto">
                                             <div className="flex flex-col items-center w-full bg-[#f8f9fa] py-3 rounded">
                                                 <div className="flex items-center gap-2 mb-1.5">
                                                     <span className="text-[9px] font-black text-[#6c757d] tracking-widest uppercase">Arranged By</span>
@@ -515,7 +508,8 @@
                 {rooms.map((room, rIdx) => {
                     const actualIdx = startIndex + rIdx;
                     return (
-                        <div key={actualIdx} className="room-row grid grid-cols-[40px_1fr_100px] border-b border-slate-200 group relative min-h-[40px]">
+                        /* 싱글룸(SGL)도 트윈룸 높이(min-h-[72px])를 강제로 유지시켜 밸런스를 맞추고 메모 공간을 확보함 */
+                        <div key={actualIdx} className="room-row grid grid-cols-[40px_1fr_100px] border-b border-slate-200 group relative min-h-[72px]">
                             {/* 룸 인덱스 & 타입 */}
                             <div className="flex flex-col items-center justify-center bg-slate-50 border-r border-slate-100 py-1">
                                 <span className="text-[11px] font-black text-slate-800">{actualIdx + 1}</span>
