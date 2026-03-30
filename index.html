@@ -220,7 +220,7 @@
                 setRooms([...rooms, { id: rooms.length + 1, roomNo: '', type: 'TWIN', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }]);
             };
 
-            // --- 스마트 PDF 파일 파싱 ---
+            // --- 스마트 PDF 파일 파싱 (서식/보일러플레이트 완벽 제거 엔진) ---
             const handleFileUpload = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -251,14 +251,25 @@
                     
                     const words = fullText.split(/[\s,\t\n]+/);
                     let extractedNames = [];
-                    const stopWords = ['성명', '이름', '투어메이커', '가이드', '객실', '번호', '베드타입', '인원수', '정보', '안내', '호텔', '프론트', '조식당', '편의점', '어메니티', '주소', '전화', '연락처', '발급', '분실'];
+                    
+                    // 강력한 블랙리스트: 투어메이커 시스템 출력 텍스트 및 학교 서식 단어들 완벽 필터링
+                    const stopWords = [
+                        '성명', '이름', '투어메이커', '가이드', '객실', '번호', '베드타입', '인원수', '정보', '안내', '호텔', '프론트', '조식당', '편의점', '어메니티', '주소', '전화', '연락처', '발급', '분실',
+                        '비고', '특이사항', '추후', '배정', '행사명', '입력', '기간', '지역', '루밍', '리스트', '담당자', '기획', '제휴', '제작', '페이지', '또는', '학생', '교직원', '실무자', '교수님', '확인', '부탁', 
+                        '스펠링', '자동', '변환', '여권', '행사', '명단', '인원', '그룹', '트래블', '테크', '기술', '영문명', '인솔자', '참가자', '총인원', '입력하세요', '제작되었습니다', '부탁드립니다', '스펠링과', '다를수', '있으니'
+                    ];
 
                     words.forEach(w => {
-                        let clean = w.replace(/[0-9a-zA-Z\.\-\:\/\=\*\+\[\]\{\}\_]/g, '');
+                        // 1. 괄호 안의 성별 마커 사전 제거
+                        let clean = w.replace(/\([여남]\)/g, '');
+                        // 2. 영어, 숫자, 온갖 특수기호 완벽 제거
+                        clean = clean.replace(/[0-9a-zA-Z\.\-\:\/\=\*\+\[\]\{\}\_\(\)]/g, '');
                         clean = clean.replace(/\s/g, ''); 
-                        if (clean.length >= 2 && clean.length <= 6 && /^[가-힣]+(\([여남]\))?$/.test(clean)) {
+                        
+                        // 3. 순수 한글 2~4글자만 이름으로 간주 (서술어 등 5글자 이상은 자동 탈락, 단독 '남','여' 도 1글자라 탈락)
+                        if (clean.length >= 2 && clean.length <= 4 && /^[가-힣]+$/.test(clean)) {
                             let isStopWord = stopWords.some(stop => clean.includes(stop));
-                            if (!isStopWord && clean !== '여' && clean !== '남') {
+                            if (!isStopWord) {
                                 extractedNames.push(clean);
                             }
                         }
