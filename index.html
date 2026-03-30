@@ -105,14 +105,46 @@
             return `${engFamily} ${engGiven}`.trim(); 
         };
 
+        // 자동 늘어나는 텍스트 영역 컴포넌트
+        const AutoResizeTextarea = ({ value, onChange, placeholder, minRows = 4 }) => {
+            const textareaRef = useRef(null);
+
+            const handleChange = (e) => {
+                onChange(e.target.value);
+                if (textareaRef.current) {
+                    textareaRef.current.style.height = 'auto';
+                    textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+                }
+            };
+
+            useEffect(() => {
+                if (textareaRef.current && value === "") {
+                    textareaRef.current.style.height = 'auto';
+                }
+            }, [value]);
+
+            return (
+                <textarea 
+                    ref={textareaRef}
+                    className="w-full p-4 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition font-mono leading-relaxed resize-none overflow-hidden"
+                    placeholder={placeholder}
+                    value={value}
+                    onChange={handleChange}
+                    rows={minRows}
+                    style={{ minHeight: `${minRows * 24 + 32}px` }}
+                />
+            );
+        };
+
         const App = () => {
             const [activeMainTab, setActiveMainTab] = useState('traveler');
             const [isNavMenuOpen, setIsNavMenuOpen] = useState(true);
 
             // ==========================================
-            // [TAB 1] 여행자 명단 (오직 수동 작성)
+            // [TAB 1] 여행자 명단 (오직 수동 입력/엑셀 복붙에 집중)
             // ==========================================
             const [travelers, setTravelers] = useState([]);
+            const [importText, setImportText] = useState("");
             const [headerInfo, setHeaderInfo] = useState({ groupName: "", date: "", nation: "", number: "" });
 
             const dragItem = useRef();
@@ -146,9 +178,64 @@
                 return { color: "text-slate-700", warning: false };
             };
 
+            const handleManualImport = () => {
+                if (!importText.trim()) return;
+                const lines = importText.split('\n').filter(l => l.trim().length > 0);
+                let newEntries = [];
+
+                lines.forEach((line) => {
+                    const cols = line.split(/[\t,]+| {2,}/).map(c => c.trim()).filter(c => c.length > 0);
+                    if (cols.length < 2) return; 
+                    if (cols[0].includes('성명') || cols[0].includes('NAME') || cols[0].includes('NO')) return;
+
+                    let offset = (!isNaN(parseInt(cols[0])) && cols[0].length < 4) ? 1 : 0;
+                    if (!cols[offset]) return;
+
+                    let passportNo = cols[offset+4] || "";
+                    let pMatch = line.match(/[A-Z]\d{8}/i);
+                    if(pMatch && !passportNo.match(/[A-Z]\d{8}/i)) passportNo = pMatch[0]; 
+
+                    let genderStr = cols[offset+3] || "";
+                    let gender = 'M';
+                    if (genderStr.toUpperCase().includes('F') || genderStr.includes('여')) gender = 'F';
+
+                    newEntries.push({
+                        id: Date.now() + Math.random(),
+                        nameKor: cols[offset] || "",
+                        nameEng: cols[offset+1] || "",
+                        birth: cols[offset+2] || "",
+                        gender: gender,
+                        passportNo: passportNo.toUpperCase(),
+                        expiry: cols[offset+5] || "",
+                        nation: cols[offset+6] || "KOR",
+                        remark: cols[offset+7] || ""
+                    });
+                });
+
+                if (newEntries.length > 0) {
+                    setTravelers([...travelers, ...newEntries]);
+                    setImportText("");
+                }
+            };
+
             const addEmptyTraveler = () => setTravelers([...travelers, { id: Date.now() + Math.random(), nameKor: "", nameEng: "", birth: "", gender: "M", passportNo: "", expiry: "", nation: "KOR", remark: "" }]);
             const removeTraveler = (id) => setTravelers(travelers.filter(t => t.id !== id));
-            const updateField = (id, field, val) => setTravelers(travelers.map(t => t.id === id ? {...t, [field]: val} : t));
+            
+            // 필드 업데이트 및 자동 영문 변환 스마트 로직
+            const updateField = (id, field, val) => setTravelers(travelers.map(t => {
+                if (t.id === id) {
+                    const updated = { ...t, [field]: val };
+                    // 한글명 입력 시 영문명이 비어있거나, 이전 한글명의 자동변환값과 같을 때만 새 영문명 자동 반영
+                    if (field === 'nameKor' && (!t.nameEng || t.nameEng === koreanToEnglish(t.nameKor))) {
+                        updated.nameEng = koreanToEnglish(val);
+                    }
+                    if (field === 'nameEng') updated.nameEng = String(val).toUpperCase();
+                    if (field === 'passportNo') updated.passportNo = String(val).toUpperCase();
+                    if (field === 'nation') updated.nation = String(val).toUpperCase();
+                    return updated;
+                }
+                return t;
+            }));
 
             // ==========================================
             // [TAB 2] 방 배정 (루밍리스트)
@@ -227,14 +314,21 @@
                 });
                 setRooms([...rooms, ...newRooms]);
                 setImportTextRooming("");
-                if(textareaRoomRef.current) textareaRoomRef.current.style.height = 'auto'; // 리셋 후 크기 복원
+                if(textareaRoomRef.current) textareaRoomRef.current.style.height = 'auto'; 
             };
 
             const updateRoom = (rIdx, field, value) => { const newRooms = [...rooms]; newRooms[rIdx][field] = value; setRooms(newRooms); };
             const updateGuest = (rIdx, gIdx, field, value) => {
                 const newRooms = [...rooms];
+                const oldGuest = newRooms[rIdx].guests[gIdx];
                 newRooms[rIdx].guests[gIdx][field] = value;
-                if (field === 'name' && isInternationalRooming) newRooms[rIdx].guests[gIdx].engName = koreanToEnglish(value);
+                
+                // 루밍리스트 한글명 입력시 영문명 자동변환 (단, 직접 수정한 적이 없을 때만)
+                if (field === 'name' && isInternationalRooming && (!oldGuest.engName || oldGuest.engName === koreanToEnglish(oldGuest.name))) {
+                    newRooms[rIdx].guests[gIdx].engName = koreanToEnglish(value);
+                }
+                if (field === 'engName') newRooms[rIdx].guests[gIdx].engName = String(value).toUpperCase();
+                
                 setRooms(newRooms);
             };
             const changeRoomType = (rIdx, type) => {
@@ -282,7 +376,7 @@
                             newRooms.push({ id: newRooms.length+1, type: guests.length===1 ? 'SINGLE' : 'TWIN', roomNo: '', guests });
                         }
                         setRooms([...rooms, ...newRooms]);
-                        alert("✅ 업로드하신 PDF에서 방 배정 인원을 성공적으로 추출했습니다.\n\n⚠️ 인식의 오류로 정확히 반영이 안될 수도 있으니 변환 후 꼭 확인해주세요.");
+                        alert("✅ 업로드하신 PDF에서 방 배정 인원을 성공적으로 추출했습니다.\n\n⚠️ 인식 오류가 있을 수 있으니 표에 반영된 이름을 꼭 확인해 주세요!");
                     } else {
                         alert("⚠️ 명단을 찾을 수 없습니다.");
                     }
@@ -326,7 +420,7 @@
 
                             <div className="flex gap-2">
                                 <button onClick={() => setIsNavMenuOpen(!isNavMenuOpen)} className="text-slate-300 hover:text-white px-3 py-1.5 text-sm font-bold transition flex items-center gap-1">
-                                    <i className={`fas fa-chevron-${isNavMenuOpen ? 'up' : 'down'}`}></i> 가이드 {isNavMenuOpen ? '닫기' : '열기'}
+                                    <i className={`fas fa-chevron-${isNavMenuOpen ? 'up' : 'down'}`}></i> 입력창 {isNavMenuOpen ? '닫기' : '열기'}
                                 </button>
                                 <button onClick={handlePrint} className="bg-blue-600 text-white px-4 py-1.5 rounded font-bold text-sm hover:bg-blue-500 transition shadow flex items-center gap-2">
                                     <i className="fas fa-file-pdf"></i> PDF 인쇄
@@ -340,13 +434,48 @@
                         {/* TAB 1: 여행자 명단 (오직 수동 입력/가벼운 UI) */}
                         {/* ========================================================================= */}
                         <div className={activeMainTab === 'traveler' ? 'block' : 'hidden'}>
+                            {isNavMenuOpen && (
+                                <div className="no-print max-w-[1200px] mx-auto mb-8 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-6">
+                                    <div className="md:w-1/3 flex flex-col justify-center border-r border-slate-100 pr-6">
+                                        <h2 className="text-base font-black text-slate-800 mb-2 flex items-center gap-2">
+                                            <i className="fas fa-table text-blue-600"></i> 빠르고 정확한 명단 작성
+                                        </h2>
+                                        <p className="text-sm text-slate-500 leading-relaxed mb-4">
+                                            오류가 발생할 수 있는 자동 인식 대신, <b>엑셀 명단 복사/붙여넣기</b> 기능으로 100% 정확하게 명단을 구성하세요.
+                                        </p>
+                                        <ul className="text-xs text-slate-500 space-y-2">
+                                            <li><i className="fas fa-check text-green-500 mr-1"></i> 가지고 계신 엑셀 표를 쭉 드래그해 복사합니다.</li>
+                                            <li><i className="fas fa-check text-green-500 mr-1"></i> 우측 빈칸에 붙여넣기(Ctrl+V) 하세요.</li>
+                                            <li><i className="fas fa-check text-green-500 mr-1"></i> 하단 표에 어긋남 없이 쏙쏙 들어갑니다.</li>
+                                        </ul>
+                                    </div>
+
+                                    <div className="flex-1 flex flex-col">
+                                        <AutoResizeTextarea 
+                                            placeholder="여기에 엑셀 명단(성명, 영문명, 생년월일 등)을 바로 붙여넣어 주세요."
+                                            value={importText}
+                                            onChange={setImportText}
+                                            minRows={4}
+                                        />
+                                        <div className="flex gap-3 mt-4 justify-end">
+                                            <button onClick={() => {setTravelers([]); setImportText("");}} className="bg-white border border-slate-300 text-slate-600 px-5 py-2.5 rounded-lg text-sm hover:bg-red-50 hover:text-red-500 hover:border-red-300 font-bold transition shadow-sm">
+                                                <i className="fas fa-trash-alt mr-1"></i> 표 전체 초기화
+                                            </button>
+                                            <button onClick={handleManualImport} className="flex-1 max-w-[250px] bg-slate-800 text-white font-black text-sm py-2.5 rounded-lg hover:bg-black transition flex justify-center items-center gap-2 shadow-md border border-slate-900">
+                                                <i className="fas fa-arrow-down"></i> 하단 표에 반영하기
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="print-container print-traveler-list bg-white w-full max-w-full xl:max-w-[1400px] mx-auto shadow-xl p-4 md:p-8 flex flex-col border border-slate-200">
-                                <div className="no-print mb-3 flex justify-between items-center px-4 bg-blue-50 py-3 rounded border border-blue-100">
-                                    <p className="text-sm text-blue-800 font-bold"><i className="fas fa-lightbulb text-amber-500 mr-2"></i>여권을 보면서 표 안의 빈칸을 마우스로 클릭해 바로 입력(수정)할 수 있습니다. (좌측 ≡ 아이콘 드래그로 행 순서 변경 가능)</p>
-                                    <div className="flex items-center gap-4">
-                                        <button onClick={() => setTravelers([])} className="text-xs text-red-500 hover:text-red-700 font-bold underline"><i className="fas fa-trash-alt"></i> 표 초기화</button>
+                                <div className="no-print mb-3 flex flex-col gap-2 px-4 bg-blue-50 py-3 rounded border border-blue-100">
+                                    <div className="flex justify-between items-center">
+                                        <p className="text-sm text-blue-800 font-bold"><i className="fas fa-lightbulb text-amber-500 mr-2"></i>셀을 마우스로 클릭하면 엑셀처럼 언제든 직접 글씨를 지우고 수정(타이핑)할 수 있습니다. (좌측 ≡ 아이콘 드래그로 행 순서 변경)</p>
                                         <span className="text-sm font-black text-slate-700 whitespace-nowrap">총 <span className="text-blue-600 text-lg">{travelers.length}</span> 명</span>
                                     </div>
+                                    <p className="text-xs font-bold text-red-500"><i className="fas fa-exclamation-circle mr-1"></i> 한글 이름을 입력하면 영문명이 자동으로 변환됩니다. 단, 실제 여권상의 영문 스펠링과 상이할 수 있으므로 반드시 재확인 및 수정 바랍니다.</p>
                                 </div>
 
                                 <div className="table-wrapper">
@@ -473,7 +602,7 @@
                                                     <i className="fas fa-keyboard"></i> 텍스트로 명단 붙여넣기
                                                 </button>
                                                 <button onClick={() => setActiveSubTabRooming('pdf')} className={`flex-1 py-3 text-sm font-bold flex justify-center items-center gap-2 transition ${activeSubTabRooming === 'pdf' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
-                                                    <i className="fas fa-file-pdf"></i> 작성된 명단(PDF) 파일 올리기
+                                                    <i className="fas fa-file-pdf"></i> 작성된 명단(PDF) 추출
                                                 </button>
                                             </div>
 
@@ -496,21 +625,18 @@
                                                             <h4 className="font-bold mb-2 text-slate-800 text-sm flex items-center gap-2"><i className="fas fa-circle-info text-blue-500"></i> 한 줄에 한 객실씩 입력</h4>
                                                             <ul className="space-y-1.5 text-xs text-slate-600">
                                                                 <li>1. 메모장 쓰듯 <b>한 줄에 한 방</b> 인원을 적어주세요.</li>
-                                                                <li>2. 성별 구분 없이 이름만 편하게 나열하셔도 됩니다.</li>
-                                                                <li>3. 이름이 많아지면 <b>창이 자동으로 부드럽게 늘어납니다.</b></li>
+                                                                <li>2. 입력하는 명단이 길어지면 <b>창이 자동으로 늘어납니다.</b></li>
+                                                                <li>3. 성별 구분 없이 이름만 편하게 나열하셔도 됩니다.</li>
                                                                 <li className="text-blue-600 font-bold mt-2 pt-2 border-t border-slate-200">※ 한 줄에 한 명은 1인실, 두 명은 2인실, 3명은 3인실로 자동 배정됩니다.</li>
                                                             </ul>
                                                         </div>
                                                         <div className="md:col-span-3 flex flex-col">
-                                                            <textarea 
-                                                                ref={textareaRoomRef}
-                                                                className="w-full flex-grow p-4 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition font-mono leading-relaxed resize-none overflow-hidden"
+                                                            <AutoResizeTextarea 
                                                                 placeholder="참가자1 참가자2&#10;참가자3 참가자4&#10;인솔자" 
                                                                 value={importTextRooming} 
-                                                                onChange={handleRoomTextChange} 
-                                                                rows="4"
-                                                                style={{ minHeight: '120px' }}
-                                                            ></textarea>
+                                                                onChange={setImportTextRooming} 
+                                                                minRows={4}
+                                                            />
                                                             <button onClick={handleRoomingSmartImport} className="w-full mt-3 py-3 bg-slate-800 text-white text-sm font-bold rounded-lg hover:bg-black transition shadow-sm border border-slate-900">
                                                                 <i className="fas fa-wand-magic-sparkles mr-2"></i> 방 배정표 자동 생성
                                                             </button>
@@ -552,7 +678,7 @@
                                                     </div>
 
                                                     <div className="flex justify-between items-center mb-3">
-                                                        {isInternationalRooming ? <p className="text-[11px] font-bold text-blue-800 no-print"><i className="fas fa-info-circle"></i> 영문 스펠링은 반드시 재확인 바랍니다.</p> : <div></div>}
+                                                        {isInternationalRooming ? <p className="text-[11px] font-bold text-red-500 no-print"><i className="fas fa-exclamation-circle mr-1"></i> 한글 입력 시 자동 변환된 영문명은 실제 여권과 상이할 수 있으므로 반드시 재확인 바랍니다.</p> : <div></div>}
                                                         <div className="flex gap-2 text-[10px] font-bold text-slate-600 no-print">
                                                             {roomStats.roomCounts.SINGLE > 0 && <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded border border-emerald-100">SGL: {roomStats.roomCounts.SINGLE}</span>}
                                                             {roomStats.roomCounts.TWIN > 0 && <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-100">TWN: {roomStats.roomCounts.TWIN}</span>}
@@ -561,7 +687,6 @@
                                                         </div>
                                                     </div>
 
-                                                    {/* 방배정 칸 너비 완벽 비율 수정 (ROOM NO 간섭 제거) */}
                                                     <div className="grid grid-cols-1 lg:grid-cols-2 print:grid-cols-2 gap-x-8 gap-y-4 w-full">
                                                         <RoomTable rooms={leftTableRooms} startIndex={pageStartIndex} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} isInternational={isInternationalRooming} globalRooms={rooms} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} />
                                                         <RoomTable rooms={rightTableRooms} startIndex={pageStartIndex + leftTableRooms.length} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} isInternational={isInternationalRooming} globalRooms={rooms} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} />
@@ -660,7 +785,6 @@
                                 {room.guests.map((g, gIdx) => (
                                     <div key={gIdx} className={`flex flex-col px-2 py-1 ${gIdx > 0 ? 'border-t border-slate-100' : ''}`}>
                                         <div className="flex items-center gap-2 mb-0.5 w-full">
-                                            {/* flex-1 속성으로 창의 크기에 맞춰 넉넉하게 늘어납니다 */}
                                             <input className="flex-1 min-w-[50px] font-bold text-xs outline-none bg-transparent focus:text-blue-600 editable-cell-input" value={g.name} placeholder="이름" onChange={(e) => updateGuest(globalIdx, gIdx, 'name', e.target.value)} />
                                             <button type="button" onClick={() => updateGuest(globalIdx, gIdx, 'gender', g.gender === '남' ? '여' : '남')} className={`flex-shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded cursor-pointer ${g.gender === '여' ? 'bg-pink-50 text-pink-600' : 'bg-blue-50 text-blue-600'}`}>
                                                 {g.gender}
