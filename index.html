@@ -6,7 +6,7 @@
     
     <!-- 카카오톡 공유 썸네일 (Meta Tags) -->
     <meta property="og:title" content="투어메이커 스마트 루밍리스트">
-    <meta property="og:description" content="빠르고 간편한 행사 방배정 시스템 (엑셀/PDF 파싱 지원)">
+    <meta property="og:description" content="빠르고 간편한 행사 방배정 시스템 (PDF 파싱 지원)">
     <meta property="og:image" content="https://blogger.googleusercontent.com/img/a/AVvXsEhPxG_ONo2BdFAGDNnn-pHIGJTrAq374YbqgwTTlyIZTP22kOWTDD_AyjKDNFPhsHg5t1Iq6zV0dL_NZIj4o97Kd0eWJYCv-NHhtIqme-Mp3htGhAdkqVv5NRU3Jc9TbdbvvVKrPslObA1oNABpgl12QtGwirC2QM5lcPCVoWm8pIbeKuZBbeDHAvpbKEQ">
     
     <title>투어메이커 스마트 루밍리스트</title>
@@ -27,8 +27,11 @@
     <!-- Babel for JSX -->
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
 
-    <!-- SheetJS for Excel Parsing -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- PDF.js for PDF Text Extraction -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    </script>
 
     <!-- Google Analytics (GA4) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-JLH9GD9SVR"></script>
@@ -48,7 +51,15 @@
             .print\:p-0 { padding: 0 !important; }
             .print\:border-none { border: none !important; }
             .print\:m-0 { margin: 0 !important; }
-            /* 강제 페이지 넘김 방지 */
+            
+            /* 인쇄 시 페이지 나누기 최적화 */
+            .print-page { 
+                page-break-after: always; 
+                page-break-inside: avoid;
+            }
+            .print-page:last-child { 
+                page-break-after: auto; 
+            }
             .room-table-container { break-inside: avoid; }
         }
     </style>
@@ -75,7 +86,7 @@
             const [showGuide, setShowGuide] = useState(true);
             const [activeTab, setActiveTab] = useState('text');
             const [headerInfo, setHeaderInfo] = useState({
-                groupName: "행사명을 입력해주세요 (예: 남선초 수학여행)",
+                groupName: "행사명을 입력해주세요",
                 date: "2025.10.01 - 10.04",
                 location: "행사 지역 입력",
                 numberDesc: "참가자 00명 / 인솔 0명"
@@ -150,50 +161,68 @@
                 setRooms([...rooms, { id: rooms.length + 1, type: 'TWIN', guests: [{name:"", engName:"", gender:"남"}, {name:"", engName:"", gender:"남"}] }]);
             };
 
-            const handleFileUpload = (e) => {
+            const handleFileUpload = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
 
-                if (typeof window.XLSX === 'undefined') {
-                    alert("엑셀 처리 엔진을 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+                if (file.type !== 'application/pdf') {
+                    alert("PDF 파일만 업로드 가능합니다.");
+                    e.target.value = '';
                     return;
                 }
 
-                const reader = new FileReader();
-                reader.onload = (evt) => {
-                    try {
-                        const data = new Uint8Array(evt.target.result);
-                        const workbook = window.XLSX.read(data, { type: 'array' });
-                        const firstSheetName = workbook.SheetNames[0];
-                        const worksheet = workbook.Sheets[firstSheetName];
+                if (typeof window.pdfjsLib === 'undefined') {
+                    alert("PDF 처리 엔진을 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+                    return;
+                }
+
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    let fullText = '';
+                    
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
                         
-                        const json = window.XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                        const extractedText = json
-                            .map(row => row.filter(cell => cell !== null && cell !== '').join(' '))
-                            .filter(line => line.trim().length > 0)
-                            .join('\n');
-                        
-                        if (extractedText) {
-                            setImportText(extractedText);
-                            setActiveTab('text');
-                            alert("엑셀 파일에서 명단을 성공적으로 추출했습니다. 내역 확인 후 [명단 일괄 배정]을 클릭해주세요.");
-                        } else {
-                            alert("엑셀 파일에서 유효한 텍스트를 찾지 못했습니다.");
-                        }
-                    } catch (err) {
-                        console.error("Excel Parsing Error:", err);
-                        alert("엑셀 파일을 읽는 중 오류가 발생했습니다.");
+                        // Y좌표 기준으로 줄바꿈을 유추하여 텍스트 결합
+                        let lastY = -1;
+                        let pageText = '';
+                        textContent.items.forEach(item => {
+                            if (lastY !== -1 && Math.abs(item.transform[5] - lastY) > 5) {
+                                pageText += '\n';
+                            }
+                            pageText += item.str + ' ';
+                            lastY = item.transform[5];
+                        });
+                        fullText += pageText + '\n\n';
                     }
-                };
-                reader.readAsArrayBuffer(file);
+                    
+                    if (fullText.trim()) {
+                        setImportText(fullText.trim());
+                        setActiveTab('text');
+                        alert("PDF 텍스트 추출 완료!\n\n💡 팁: PDF 양식에 따라 줄바꿈이 불규칙할 수 있습니다. 한 줄에 한 방씩 들어가도록 텍스트 상자에서 내용만 살짝 정돈하신 후 [명단 일괄 배정]을 클릭해주세요.");
+                    } else {
+                        alert("PDF 파일에서 텍스트를 찾지 못했습니다. (이미지 스캔본일 가능성이 있습니다)");
+                    }
+                } catch (err) {
+                    console.error("PDF Parsing Error:", err);
+                    alert("PDF 파일을 읽는 중 오류가 발생했습니다.");
+                }
+                e.target.value = ''; // 같은 파일 재업로드 가능하도록 초기화
             };
 
             const handleShare = () => {
-                alert("💡 안내: 현재 버전은 단일 웹페이지 배포용입니다.\n클라우드 자동 저장 및 링크 공유 기능은 Tourmaker 정식 서버 환경(Firebase 연동)에서 활성화됩니다.\n\n현재는 배정 후 [인쇄] 버튼을 눌러 PDF로 저장하여 공유해주세요.");
+                alert("💡 안내: 현재 버전은 단일 웹페이지 배포용입니다.\n\n배정이 완료되면 [인쇄] 버튼을 눌러 PDF 형식으로 저장하여 공유해주세요.");
             };
 
-            const leftTableRooms = rooms.slice(0, Math.ceil(rooms.length / 2));
-            const rightTableRooms = rooms.slice(Math.ceil(rooms.length / 2));
+            // --- 페이징 처리 로직 (1페이지당 최대 40객실 기준) ---
+            const ROOMS_PER_PAGE = 40;
+            const pages = [];
+            const totalPages = Math.max(1, Math.ceil(rooms.length / ROOMS_PER_PAGE));
+            for (let i = 0; i < totalPages; i++) {
+                pages.push(rooms.slice(i * ROOMS_PER_PAGE, (i + 1) * ROOMS_PER_PAGE));
+            }
 
             return (
                 <div>
@@ -238,7 +267,7 @@
                                         <i className="fas fa-file-alt"></i> 수기 / 텍스트 붙여넣기
                                     </button>
                                     <button onClick={() => setActiveTab('pdf')} className={`flex-1 py-3 text-sm font-bold flex justify-center items-center gap-2 transition ${activeTab === 'pdf' ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>
-                                        <i className="fas fa-file-excel"></i> 기존 양식(Excel) 업로드
+                                        <i className="fas fa-file-pdf"></i> 기존 양식(PDF) 업로드
                                     </button>
                                 </div>
 
@@ -253,30 +282,30 @@
                                                     <li>• 배정 후 <b>표에서 성별 배지를 클릭</b>하여 간편하게 남/여 전환이 가능합니다.</li>
                                                     <li>• 한글 입력 시 <b>영문명이 자동 완성</b>됩니다.</li>
                                                 </ul>
-                                                <div className="mt-4 p-3 bg-slate-50 rounded-lg text-xs text-slate-500 font-mono">
+                                                <div className="mt-4 p-4 bg-slate-50 rounded-lg text-sm text-slate-600 font-mono leading-relaxed border border-slate-200">
                                                     참가자1 참가자2<br/>참가자3 참가자4<br/>인솔자
                                                 </div>
                                             </div>
                                             <div>
                                                 <textarea 
-                                                    className="w-full h-28 p-3 text-sm border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition"
+                                                    className="w-full h-32 p-3 text-sm border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition"
                                                     placeholder="여기에 명단을 복사해 넣으세요..."
                                                     value={importText}
                                                     onChange={(e) => setImportText(e.target.value)}
                                                 ></textarea>
-                                                <button onClick={handleSmartImport} className="w-full mt-2 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-black transition">명단 일괄 배정</button>
+                                                <button onClick={handleSmartImport} className="w-full mt-3 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-black transition shadow-md">명단 일괄 배정</button>
                                             </div>
                                         </div>
                                     ) : (
                                         <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
                                             <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
-                                                <i className="fas fa-upload text-blue-500 text-2xl"></i>
+                                                <i className="fas fa-file-pdf text-red-500 text-3xl"></i>
                                             </div>
-                                            <h4 className="font-bold text-slate-800 mb-2">파일 업로드 하세요</h4>
-                                            <p className="text-xs text-slate-500 mb-6 max-w-sm">엑셀 파일을 올리면 시스템이 방 배정 구조를 분석하여 아래 표에 자동으로 텍스트를 채워줍니다.</p>
-                                            <input type="file" id="file-upload" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload}/>
-                                            <label htmlFor="file-upload" className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 transition">
-                                                PC에서 엑셀 파일 선택
+                                            <h4 className="font-bold text-slate-800 mb-2">PDF 파일을 업로드 하세요</h4>
+                                            <p className="text-xs text-slate-500 mb-6 max-w-sm">기관에서 받은 PDF 양식을 올리면 시스템이 텍스트를 추출해 드립니다. 텍스트를 확인하고 일괄 배정할 수 있습니다.</p>
+                                            <input type="file" id="file-upload" accept=".pdf" className="hidden" onChange={handleFileUpload}/>
+                                            <label htmlFor="file-upload" className="cursor-pointer bg-blue-600 text-white px-6 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 transition shadow-md">
+                                                PC에서 PDF 파일 선택
                                             </label>
                                         </div>
                                     )}
@@ -284,52 +313,69 @@
                             </div>
                         )}
 
-                        {/* 출력 양식 */}
-                        <div className="bg-white shadow-xl p-6 md:p-10 border-t-[8px] border-slate-900 min-h-[1200px] print:shadow-none print:p-0 print:border-none print:m-0 relative">
-                            
-                            <div className="flex flex-col md:flex-row justify-between items-start border-b-[3px] border-slate-900 pb-6 mb-8 gap-6">
-                                <div className="space-y-3 flex-1 min-w-0 w-full mt-2">
-                                    <HeaderField label="GROUP" val={headerInfo.groupName} onChange={(v) => setHeaderInfo({...headerInfo, groupName: v})} isMain={true} />
-                                    <HeaderField label="DATE" val={headerInfo.date} onChange={(v) => setHeaderInfo({...headerInfo, date: v})} />
-                                    <HeaderField label="LOCATION" val={headerInfo.location} onChange={(v) => setHeaderInfo({...headerInfo, location: v})} />
-                                    <HeaderField label="TOTAL PAX" val={headerInfo.numberDesc} onChange={(v) => setHeaderInfo({...headerInfo, numberDesc: v})} />
-                                </div>
-                                <div className="text-right flex-shrink-0">
-                                    <h2 className="text-4xl md:text-5xl font-black italic tracking-tighter text-slate-900 leading-none">ROOMING<br/>LIST</h2>
-                                </div>
-                            </div>
+                        {/* 여러 장으로 나뉘는 출력 양식 컨테이너 */}
+                        <div className="space-y-8 print:space-y-0">
+                            {pages.map((pageRooms, pageIndex) => {
+                                const leftTableRooms = pageRooms.slice(0, Math.ceil(pageRooms.length / 2));
+                                const rightTableRooms = pageRooms.slice(Math.ceil(pageRooms.length / 2));
+                                const pageStartIndex = pageIndex * ROOMS_PER_PAGE;
 
-                            {isInternational && (
-                                <div className="mb-6 p-3 bg-blue-50 rounded-lg border border-blue-100 no-print flex items-center justify-between">
-                                    <p className="text-xs font-bold text-blue-800 flex items-center gap-2">
-                                        <i className="fas fa-circle-exclamation"></i> 
-                                        자동변환된 영문은 여권상의 영문과 다를 수 있습니다. 확인 후 수정 가능합니다.
-                                    </p>
-                                </div>
-                            )}
+                                return (
+                                    <div key={pageIndex} className="print-page bg-white shadow-xl p-6 md:p-10 border-t-[8px] border-slate-900 min-h-[1100px] print:shadow-none print:p-0 print:border-none print:m-0 relative flex flex-col justify-between">
+                                        
+                                        <div>
+                                            {/* Header */}
+                                            <div className="flex flex-col md:flex-row justify-between items-start border-b-[3px] border-slate-900 pb-6 mb-8 gap-6">
+                                                <div className="space-y-3 flex-1 min-w-0 w-full mt-2">
+                                                    <HeaderField label="GROUP" val={headerInfo.groupName} onChange={(v) => setHeaderInfo({...headerInfo, groupName: v})} isMain={true} />
+                                                    <HeaderField label="DATE" val={headerInfo.date} onChange={(v) => setHeaderInfo({...headerInfo, date: v})} />
+                                                    <HeaderField label="LOCATION" val={headerInfo.location} onChange={(v) => setHeaderInfo({...headerInfo, location: v})} />
+                                                    <HeaderField label="TOTAL PAX" val={headerInfo.numberDesc} onChange={(v) => setHeaderInfo({...headerInfo, numberDesc: v})} />
+                                                </div>
+                                                <div className="text-right flex-shrink-0 flex flex-col items-end">
+                                                    <h2 className="text-4xl md:text-5xl font-black italic tracking-tighter text-slate-900 leading-none">ROOMING<br/>LIST</h2>
+                                                    {totalPages > 1 && <span className="text-xs font-bold text-slate-400 mt-2">Page {pageIndex + 1} of {totalPages}</span>}
+                                                </div>
+                                            </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-                                <RoomTable rooms={leftTableRooms} startIndex={0} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} isInternational={isInternational} />
-                                <RoomTable rooms={rightTableRooms} startIndex={leftTableRooms.length} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} isInternational={isInternational} />
-                            </div>
+                                            {isInternational && (
+                                                <div className="mb-6 p-3 bg-blue-50 rounded-lg border border-blue-100 no-print flex items-center justify-between">
+                                                    <p className="text-xs font-bold text-blue-800 flex items-center gap-2">
+                                                        <i className="fas fa-circle-exclamation"></i> 
+                                                        자동변환된 영문은 여권상의 영문과 다를 수 있습니다. 확인 후 수정 가능합니다.
+                                                    </p>
+                                                </div>
+                                            )}
 
-                            <div className="mt-20 pt-8 border-t border-slate-200 flex flex-col items-end">
-                                <div className="flex flex-col items-center w-full bg-[#f8f9fa] py-4 rounded-lg">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="text-[10px] font-black text-[#6c757d] tracking-widest uppercase">Arranged By</span>
-                                        <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgHfgIX70O5k6Anuo0UgALIdaG9jSga9auHu3uyz0uEirylGPAJnjN_qQbvEGMUvPqUQf_g9FMNUHRxlDcUBf4vZ3Mpy4TnA9WxbmzWYK11gt2zuy_Irl4wctNFjcjLyPo0GPXV792o_J7L9guRMuDfeC1gy7USwywjYbECZgzcsHybuGRRAXAnO1eNmP8/s320/logo.png" alt="Tourmaker Logo" className="h-6 object-contain" />
+                                            {/* Tables */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                                                <RoomTable rooms={leftTableRooms} startIndex={pageStartIndex} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} isInternational={isInternational} />
+                                                <RoomTable rooms={rightTableRooms} startIndex={pageStartIndex + leftTableRooms.length} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} isInternational={isInternational} />
+                                            </div>
+                                        </div>
+
+                                        {/* Footer Area (Logo & Signature) */}
+                                        <div className="mt-12 pt-8 border-t border-slate-200 flex flex-col items-end">
+                                            <div className="flex flex-col items-center w-full bg-[#f8f9fa] py-4 rounded-lg">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="text-[10px] font-black text-[#6c757d] tracking-widest uppercase">Arranged By</span>
+                                                    <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgHfgIX70O5k6Anuo0UgALIdaG9jSga9auHu3uyz0uEirylGPAJnjN_qQbvEGMUvPqUQf_g9FMNUHRxlDcUBf4vZ3Mpy4TnA9WxbmzWYK11gt2zuy_Irl4wctNFjcjLyPo0GPXV792o_J7L9guRMuDfeC1gy7USwywjYbECZgzcsHybuGRRAXAnO1eNmP8/s320/logo.png" alt="Tourmaker Logo" className="h-6 object-contain" />
+                                                </div>
+                                                <div className="text-center w-full">
+                                                    <p style={{ fontSize: '12px', color: '#6c757d', margin: 0, textAlign: 'center' }}>
+                                                        [System Powered by TOURMAKER] 본 루밍리스트는 담당자의 기획과 <a href="https://tourmaker.kr" target="_blank" rel="noreferrer" style={{ fontWeight: 'bold', color: '#6c757d', textDecoration: 'underline' }}>투어메이커</a>의 트래블 테크 기술 제휴로 제작되었습니다.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                     </div>
-                                    <div className="text-center w-full">
-                                        <p style={{ fontSize: '12px', color: '#6c757d', margin: 0, textAlign: 'center' }}>
-                                            [System Powered by TOURMAKER] 본 루밍리스트는 담당자의 기획과 <a href="https://tourmaker.kr" target="_blank" rel="noreferrer" style={{ fontWeight: 'bold', color: '#6c757d', textDecoration: 'underline' }}>투어메이커</a>의 트래블 테크 기술 제휴로 제작되었습니다.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
+                                );
+                            })}
                         </div>
                     </div>
                     
-                    <button onClick={addRoom} className="no-print fixed bottom-8 right-8 w-14 h-14 bg-blue-600 text-white rounded-full shadow-xl flex items-center justify-center hover:bg-blue-700 transition-colors">
+                    <button onClick={addRoom} className="no-print fixed bottom-8 right-8 w-14 h-14 bg-blue-600 text-white rounded-full shadow-xl flex items-center justify-center hover:bg-blue-700 transition-colors z-50">
                         <i className="fas fa-plus text-xl"></i>
                     </button>
                 </div>
@@ -370,10 +416,10 @@
                             </div>
                             <div className="flex-grow py-1">
                                 {room.guests.map((g, gIdx) => (
-                                    <div key={gIdx} className={`flex flex-col px-3 py-1 ${gIdx > 0 ? 'border-t border-slate-100' : ''}`}>
-                                        <div className="flex items-center gap-2">
+                                    <div key={gIdx} className={`flex flex-col px-3 py-1.5 ${gIdx > 0 ? 'border-t border-slate-100' : ''}`}>
+                                        <div className="flex items-center gap-2 mb-0.5">
                                             <input 
-                                                className="w-16 font-bold text-sm outline-none bg-transparent focus:text-blue-600" 
+                                                className="w-20 font-bold text-sm outline-none bg-transparent focus:text-blue-600" 
                                                 value={g.name} placeholder="이름" onChange={(e) => updateGuest(actualIdx, gIdx, 'name', e.target.value)}
                                             />
                                             <button 
@@ -386,7 +432,7 @@
                                         </div>
                                         {isInternational && (
                                             <input 
-                                                className="text-[10px] text-slate-400 outline-none uppercase bg-transparent focus:text-slate-800 w-full" 
+                                                className="text-[11px] font-medium tracking-wide text-slate-400 outline-none uppercase bg-transparent focus:text-slate-800 w-full border-b border-transparent focus:border-slate-300 pb-0.5" 
                                                 placeholder="ENGLISH NAME" value={g.engName} onChange={(e) => updateGuest(actualIdx, gIdx, 'engName', e.target.value)}
                                             />
                                         )}
