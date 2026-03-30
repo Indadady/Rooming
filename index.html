@@ -44,50 +44,68 @@
             body { background-color: white !important; padding: 0 !important; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             
-            /* 명단 인쇄용 기본 뼈대 */
-            .print-traveler-list { width: 100% !important; max-width: none !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; @page { size: A4 portrait; margin: 10mm; } }
+            /* 명단 및 방배정 공통 A4 페이지 설정 */
+            .print-page { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; page-break-after: always; break-inside: avoid !important; display: flex !important; flex-direction: column !important; min-height: 277mm !important; }
+            .print-page:last-child { page-break-after: auto; }
+            @page { size: A4 portrait; margin: 10mm; }
+
+            .print-traveler-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; display: flex !important; flex-direction: column !important; min-height: 277mm !important; }
             .print-traveler-list .table-wrapper { overflow: visible !important; width: 100% !important; }
-            .print-traveler-list table { border-collapse: collapse !important; width: 100% !important; page-break-inside: auto; min-width: 0 !important; }
+            .print-traveler-list table { border-collapse: collapse !important; width: 100% !important; min-width: 0 !important; }
             .print-traveler-list thead { display: table-header-group; }
-            .print-traveler-list tfoot { display: table-footer-group; }
-            .print-traveler-list tr { page-break-inside: avoid; page-break-after: auto; }
+            .print-traveler-list tr { page-break-inside: avoid; }
+            .print-traveler-list th, .print-traveler-list td { border: none !important; border-bottom: 1px solid #e2e8f0 !important; padding: 8px 2px !important; font-size: 8.5pt !important; }
+            .print-traveler-list th { border-top: 2px solid #1e293b !important; border-bottom: 2px solid #1e293b !important; color: #1e293b !important; }
             .print-traveler-list th.no-border-top, .print-traveler-list td.no-border-top { border: none !important; padding: 0 !important; }
             
-            /* --- [명단] 동적 인쇄 사이즈 조절 --- */
+            .print-footer { page-break-inside: avoid; } /* 푸터 페이지 분리 방지 */
+
+            /* --- [명단] 동적 인쇄 사이즈 조절 (글씨 및 헤더까지 확대) --- */
             /* 1. 소규모 (1~10명): 글자 크기 13pt, 상하 여백 대폭 확대 */
-            .print-size-lg .print-traveler-list th, .print-size-lg .print-traveler-list td { padding: 20px 4px !important; font-size: 13pt !important; border-bottom: 1px solid #cbd5e1 !important; }
+            .print-size-lg .print-traveler-list th, .print-size-lg .print-traveler-list td { padding: 18px 4px !important; font-size: 13pt !important; border-bottom: 1px solid #cbd5e1 !important; }
             .print-size-lg .editable-cell-input { font-size: 13pt !important; font-weight: 700 !important; }
             .print-size-lg .print-traveler-list th { border-top: 3px solid #1e293b !important; border-bottom: 3px solid #1e293b !important; }
+            .print-size-lg .header-label { font-size: 11pt !important; }
+            .print-size-lg .header-input { font-size: 16pt !important; }
+            .print-size-lg .main-title { font-size: 28pt !important; margin-bottom: 10px !important; }
             
             /* 2. 중규모 (11~20명): 글자 크기 11pt, 상하 여백 적당히 확대 */
-            .print-size-md .print-traveler-list th, .print-size-md .print-traveler-list td { padding: 13px 3px !important; font-size: 11pt !important; border-bottom: 1px solid #cbd5e1 !important; }
+            .print-size-md .print-traveler-list th, .print-size-md .print-traveler-list td { padding: 12px 3px !important; font-size: 11pt !important; border-bottom: 1px solid #cbd5e1 !important; }
             .print-size-md .editable-cell-input { font-size: 11pt !important; font-weight: 600 !important; }
             .print-size-md .print-traveler-list th { border-top: 2px solid #1e293b !important; border-bottom: 2px solid #1e293b !important; }
+            .print-size-md .header-label { font-size: 9pt !important; }
+            .print-size-md .header-input { font-size: 13pt !important; }
+            .print-size-md .main-title { font-size: 22pt !important; margin-bottom: 5px !important; }
 
-            /* 3. 대규모 (21명 이상): 기존 콤팩트 모드 */
-            .print-size-sm .print-traveler-list th, .print-size-sm .print-traveler-list td { padding: 8px 2px !important; font-size: 8.5pt !important; border-bottom: 1px solid #e2e8f0 !important; }
+            /* 3. 대규모 (21명 이상): 콤팩트 모드 */
+            .print-size-sm .print-traveler-list th, .print-size-sm .print-traveler-list td { padding: 8px 2px !important; font-size: 8.5pt !important; }
             .print-size-sm .editable-cell-input { font-size: 8.5pt !important; }
-            .print-size-sm .print-traveler-list th { border-top: 2px solid #1e293b !important; border-bottom: 2px solid #1e293b !important; }
+            .print-size-sm .header-label { font-size: 8pt !important; }
+            .print-size-sm .header-input { font-size: 11pt !important; }
+            .print-size-sm .main-title { font-size: 18pt !important; }
 
             /* --- [방배정] 동적 인쇄 사이즈 조절 --- */
-            .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; @page { size: A4 portrait; margin: 10mm; } }
-            .print-page { page-break-after: always; break-inside: avoid !important; display: flex !important; flex-direction: column !important; min-height: 277mm !important; }
-            .print-page:last-child { page-break-after: auto; }
+            .room-table-container, .room-row { break-inside: avoid; }
             
-            /* 소규모 객실 (1~10칸) */
-            .print-room-size-lg .room-row { min-height: 110px !important; padding: 10px 0 !important; }
-            .print-room-size-lg .editable-cell-input, .print-room-size-lg .room-row input { font-size: 13pt !important; font-weight: 700 !important; }
+            .print-room-size-lg .room-row { min-height: 100px !important; padding: 10px 0 !important; }
+            .print-room-size-lg .editable-cell-input, .print-room-size-lg .room-row input { font-size: 12pt !important; font-weight: 700 !important; }
             .print-room-size-lg .room-row select { font-size: 11pt !important; }
-            .print-room-size-lg .room-row button { font-size: 10pt !important; padding: 4px 6px !important; }
-            .print-room-size-lg .flex-col.px-1\.5 { padding-top: 8px !important; padding-bottom: 8px !important; } /* 손님 한명당 여백 증가 */
+            .print-room-size-lg .flex-col.px-1\.5 { padding-top: 8px !important; padding-bottom: 8px !important; } 
+            .print-room-size-lg .header-label { font-size: 11pt !important; }
+            .print-room-size-lg .header-input { font-size: 16pt !important; }
+            .print-room-size-lg .main-title { font-size: 28pt !important; }
 
-            /* 중규모 객실 (11~20칸) */
-            .print-room-size-md .room-row { min-height: 85px !important; padding: 5px 0 !important; }
-            .print-room-size-md .editable-cell-input, .print-room-size-md .room-row input { font-size: 11pt !important; font-weight: 600 !important; }
-            .print-room-size-md .room-row select { font-size: 10pt !important; }
+            .print-room-size-md .room-row { min-height: 80px !important; padding: 5px 0 !important; }
+            .print-room-size-md .editable-cell-input, .print-room-size-md .room-row input { font-size: 10pt !important; font-weight: 600 !important; }
+            .print-room-size-md .room-row select { font-size: 9pt !important; }
+            .print-room-size-md .header-label { font-size: 9pt !important; }
+            .print-room-size-md .header-input { font-size: 13pt !important; }
+            .print-room-size-md .main-title { font-size: 22pt !important; }
 
-            /* 대규모 객실 (21칸 이상 - 기본) */
-            .print-room-size-sm .room-row { min-height: 72px !important; }
+            .print-room-size-sm .room-row { min-height: 60px !important; }
+            .print-room-size-sm .header-label { font-size: 8pt !important; }
+            .print-room-size-sm .header-input { font-size: 11pt !important; }
+            .print-room-size-sm .main-title { font-size: 18pt !important; }
             
             input, select, textarea { border: none !important; background: transparent !important; appearance: none; -webkit-appearance: none; }
         }
@@ -170,11 +188,8 @@
         };
 
         const App = () => {
-            // 외부 공유 모드 판별 (URL 파라미터 ?shared=true)
-            const isInitialShared = useMemo(() => {
-                return new URLSearchParams(window.location.search).get('shared') === 'true';
-            }, []);
-
+            // 외부 공유 모드 판별
+            const isInitialShared = useMemo(() => new URLSearchParams(window.location.search).get('shared') === 'true', []);
             const [isSharedMode, setIsSharedMode] = useState(isInitialShared);
             const [activeMainTab, setActiveMainTab] = useState(isInitialShared ? 'rooming' : 'traveler');
             const [isNavMenuOpen, setIsNavMenuOpen] = useState(true);
@@ -192,22 +207,40 @@
             const dragItem = useRef();
             const dragOverItem = useRef();
 
-            const dragStart = (e, position) => { dragItem.current = position; e.target.closest('tr')?.classList.add('dragging'); };
-            const dragEnter = (e, position) => { dragOverItem.current = position; };
+            // [에러 수정] 드래그 앤 드롭 안정성 대폭 강화 (White Screen of Death 방지)
+            const dragStart = (e, position) => { 
+                dragItem.current = position; 
+                e.target.closest('tr')?.classList.add('dragging'); 
+            };
+            const dragEnter = (e, position) => { 
+                dragOverItem.current = position; 
+            };
             const drop = (e) => {
                 const tr = e.target.closest('tr');
                 if (tr) tr.classList.remove('dragging');
-                if (dragItem.current === null || dragOverItem.current === null) return;
+                
+                // 잘못된 드래그 시 undefined가 배열에 들어가 화면이 뻗는 치명적 버그 수정
+                if (dragItem.current === undefined || dragItem.current === null || 
+                    dragOverItem.current === undefined || dragOverItem.current === null) {
+                    return;
+                }
+                
                 setTravelers(prev => {
                     const copyListItems = [...prev];
                     const dragItemContent = copyListItems[dragItem.current];
+                    if (!dragItemContent) return prev; // 확실한 2중 안전장치
+
                     copyListItems.splice(dragItem.current, 1);
                     copyListItems.splice(dragOverItem.current, 0, dragItemContent);
                     return copyListItems;
                 });
                 dragItem.current = null; dragOverItem.current = null;
             };
-            const dragEnd = (e) => { e.target.closest('tr')?.classList.remove('dragging'); };
+            const dragEnd = (e) => { 
+                e.target.closest('tr')?.classList.remove('dragging'); 
+                dragItem.current = null; 
+                dragOverItem.current = null;
+            };
 
             const getExpiryStatus = (dateStr) => {
                 if (!dateStr) return { color: "text-slate-400", warning: false };
@@ -243,7 +276,6 @@
                 }));
             };
 
-            // 인원수에 따른 CSS 클래스 반환
             const getTravelerPrintClass = () => {
                 if (travelers.length <= 10) return 'print-size-lg';
                 if (travelers.length <= 20) return 'print-size-md';
@@ -263,22 +295,39 @@
             const dragRoomItem = useRef();
             const dragOverRoomItem = useRef();
 
-            const dragRoomStart = (e, position) => { dragRoomItem.current = position; e.target.closest('.room-row')?.classList.add('dragging'); };
-            const dragRoomEnter = (e, position) => { dragOverRoomItem.current = position; };
+            // [에러 수정] 방 배정 드래그 안정성 동시 적용
+            const dragRoomStart = (e, position) => { 
+                dragRoomItem.current = position; 
+                e.target.closest('.room-row')?.classList.add('dragging'); 
+            };
+            const dragRoomEnter = (e, position) => { 
+                dragOverRoomItem.current = position; 
+            };
             const dropRoom = (e) => {
                 const tr = e.target.closest('.room-row');
                 if (tr) tr.classList.remove('dragging');
-                if (dragRoomItem.current === null || dragOverRoomItem.current === null) return;
+                
+                if (dragRoomItem.current === undefined || dragRoomItem.current === null || 
+                    dragOverRoomItem.current === undefined || dragOverRoomItem.current === null) {
+                    return;
+                }
+                
                 setRooms(prev => {
                     const copyRooms = [...prev];
                     const dragContent = copyRooms[dragRoomItem.current];
+                    if (!dragContent) return prev;
+
                     copyRooms.splice(dragRoomItem.current, 1);
                     copyRooms.splice(dragOverRoomItem.current, 0, dragContent);
                     return copyRooms;
                 });
                 dragRoomItem.current = null; dragOverRoomItem.current = null;
             };
-            const dragRoomEnd = (e) => { e.target.closest('.room-row')?.classList.remove('dragging'); };
+            const dragRoomEnd = (e) => { 
+                e.target.closest('.room-row')?.classList.remove('dragging'); 
+                dragRoomItem.current = null;
+                dragOverRoomItem.current = null;
+            };
 
             const roomStats = useMemo(() => {
                 let total = 0, male = 0, female = 0;
@@ -551,7 +600,7 @@
                         {/* TAB 1: 여행자 명단 */}
                         {/* ========================================================================= */}
                         <div className={activeMainTab === 'traveler' ? 'block' : 'hidden'}>
-                            <div className={`print-container print-traveler-list bg-white w-full max-w-full xl:max-w-[1400px] mx-auto shadow-xl p-3 sm:p-5 md:p-8 flex flex-col border border-slate-200 ${getTravelerPrintClass()}`}>
+                            <div className={`print-container print-page print-traveler-list bg-white w-full max-w-full xl:max-w-[1400px] mx-auto shadow-xl p-3 sm:p-5 md:p-8 flex flex-col border border-slate-200 ${getTravelerPrintClass()}`} style={{ minHeight: '277mm' }}>
                                 <div className="no-print mb-3 flex flex-col gap-2 px-3 md:px-4 bg-blue-50 py-3 rounded border border-blue-100">
                                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                                         <p className="text-[11px] md:text-sm text-blue-800 font-bold leading-relaxed">
@@ -569,108 +618,105 @@
                                     <p className="text-[10px] text-blue-600 font-bold block md:hidden mt-1"><i className="fas fa-arrows-alt-h mr-1"></i> 모바일에서는 표를 좌우로 스크롤하여 작성하세요.</p>
                                 </div>
 
-                                <div className="table-wrapper">
-                                    <table className="w-full text-xs md:text-sm border-collapse min-w-[900px]">
-                                        <thead className="print:table-header-group">
-                                            <tr>
-                                                <th colSpan="11" className="no-border-top bg-white p-0 pt-2 pb-4 md:pb-6 text-left">
-                                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-4 border-slate-900 pb-3 md:pb-4 mb-2 gap-4">
-                                                        <div className="space-y-3 flex-1 w-full">
-                                                            <h2 className="text-xl sm:text-3xl md:text-4xl font-black tracking-tighter text-slate-900 mt-2">OVERSEAS TRAVELERS LIST</h2>
-                                                            <div className="grid grid-cols-1 gap-1 text-[10px] md:text-sm font-bold text-slate-700 max-w-full sm:max-w-[400px] md:max-w-[500px]">
-                                                                <HeaderField label="GROUP NAME" value={commonHeader.groupName} onChange={(v) => setCommonHeader({ ...commonHeader, groupName: v })} />
-                                                                <HeaderField label="DATE" value={commonHeader.date} onChange={(v) => setCommonHeader({ ...commonHeader, date: v })} />
-                                                                <HeaderField label="NATION/LOCAL" value={commonHeader.location} onChange={(v) => setCommonHeader({ ...commonHeader, location: v })} />
-                                                                <HeaderField label="NUMBER" value={commonHeader.number} onChange={(v) => setCommonHeader({ ...commonHeader, number: v })} />
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-left sm:text-right flex flex-col items-start sm:items-end w-full sm:w-auto">
-                                                            <div className="text-[9px] md:text-[11px] text-red-500 font-bold italic mb-1 md:mb-0">여권 만료일은 출발일 기준 최소 6개월 이상 권장</div>
-                                                        </div>
-                                                    </div>
-                                                </th>
-                                            </tr>
-                                            <tr className="text-slate-800 border-t-2 border-b-2 border-slate-800 bg-transparent">
-                                                <th className="no-print p-3 w-10 text-center"><i className="fas fa-sort text-slate-300"></i></th>
-                                                <th className="p-3 w-12 text-center font-bold">NO</th>
-                                                <th className="p-3 text-left font-bold min-w-[90px] whitespace-nowrap">성명</th>
-                                                <th className="p-3 text-left font-bold min-w-[220px]">NAME (영문명)</th>
-                                                <th className="p-3 text-left font-bold min-w-[120px] whitespace-nowrap">생년월일</th>
-                                                <th className="p-3 w-16 text-center font-bold whitespace-nowrap">성별</th>
-                                                <th className="p-3 text-left font-bold min-w-[130px] whitespace-nowrap">여권번호</th>
-                                                <th className="p-3 text-left font-bold min-w-[120px] whitespace-nowrap">여권만료일</th>
-                                                <th className="p-3 text-center font-bold w-20 whitespace-nowrap">국적</th>
-                                                <th className="p-3 text-left font-bold min-w-[150px]">비고</th>
-                                                <th className="p-3 no-print w-12 text-center font-bold">삭제</th>
-                                            </tr>
-                                        </thead>
-
-                                        <tbody className="print:table-row-group text-slate-800">
-                                            {travelers.length === 0 ? (
+                                <div className="flex-1 flex flex-col">
+                                    <div className="table-wrapper flex-1">
+                                        <table className="w-full text-xs md:text-sm border-collapse min-w-[900px]">
+                                            <thead className="print:table-header-group">
                                                 <tr>
-                                                    <td colSpan="11" className="p-10 md:p-16 text-center text-xs md:text-sm text-slate-400 italic border-b border-slate-200">하단 '빈칸 1줄 추가' 버튼을 눌러 인원을 추가해 주세요.</td>
+                                                    <th colSpan="11" className="no-border-top bg-white p-0 pt-2 pb-4 md:pb-6 text-left">
+                                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-4 border-slate-900 pb-3 md:pb-4 mb-2 gap-4">
+                                                            <div className="space-y-3 flex-1 w-full">
+                                                                <h2 className="main-title text-xl sm:text-3xl md:text-4xl font-black tracking-tighter text-slate-900 mt-2">OVERSEAS TRAVELERS LIST</h2>
+                                                                <div className="grid grid-cols-1 gap-1 text-[10px] md:text-sm font-bold text-slate-700 max-w-full sm:max-w-[400px] md:max-w-[500px]">
+                                                                    <HeaderField label="GROUP NAME" value={commonHeader.groupName} onChange={(v) => setCommonHeader({ ...commonHeader, groupName: v })} />
+                                                                    <HeaderField label="DATE" value={commonHeader.date} onChange={(v) => setCommonHeader({ ...commonHeader, date: v })} />
+                                                                    <HeaderField label="NATION/LOCAL" value={commonHeader.location} onChange={(v) => setCommonHeader({ ...commonHeader, location: v })} />
+                                                                    <HeaderField label="NUMBER" value={commonHeader.number} onChange={(v) => setCommonHeader({ ...commonHeader, number: v })} />
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-left sm:text-right flex flex-col items-start sm:items-end w-full sm:w-auto">
+                                                                <div className="text-[9px] md:text-[11px] text-red-500 font-bold italic mb-1 md:mb-0">여권 만료일은 출발일 기준 최소 6개월 이상 권장</div>
+                                                            </div>
+                                                        </div>
+                                                    </th>
                                                 </tr>
-                                            ) : travelers.map((t, idx) => {
-                                                const status = getExpiryStatus(t.expiry);
-                                                return (
-                                                    <tr key={t.id} className="border-b border-slate-200 hover:bg-slate-50 transition group bg-white" draggable onDragStart={(e) => dragStart(e, idx)} onDragEnter={(e) => dragEnter(e, idx)} onDragEnd={dragEnd} onDrop={drop} onDragOver={(e) => e.preventDefault()}>
-                                                        <td className="no-print p-3 text-center text-slate-300 hover:text-blue-500 drag-handle" title="드래그하여 순서 변경">
-                                                            <i className="fas fa-bars"></i>
-                                                        </td>
-                                                        <td className="p-3 text-center text-slate-500 font-bold">{idx + 1}</td>
-                                                        <td className="p-3"><EditableCell val={t.nameKor} onChange={(v) => updateField(t.id, 'nameKor', v)} bold /></td>
-                                                        <td className="p-3"><EditableCell val={t.nameEng} onChange={(v) => updateField(t.id, 'nameEng', v)} uppercase /></td>
-                                                        <td className="p-3"><EditableCell val={t.birth} onChange={(v) => updateField(t.id, 'birth', v)} placeholder="YYYY-MM-DD" /></td>
-                                                        <td className="p-3 text-center">
-                                                            <select className="bg-transparent border-none outline-none cursor-pointer text-slate-700 font-bold editable-cell-input text-center" value={t.gender} onChange={(e) => updateField(t.id, 'gender', e.target.value)}>
-                                                                <option value="M">M</option>
-                                                                <option value="F">F</option>
-                                                            </select>
-                                                        </td>
-                                                        <td className="p-3"><EditableCell val={t.passportNo} onChange={(v) => updateField(t.id, 'passportNo', v)} uppercase /></td>
-                                                        <td className={`p-3 ${status.color}`}>
-                                                            <div className="flex items-center justify-between gap-2">
-                                                                <EditableCell val={t.expiry} onChange={(v) => updateField(t.id, 'expiry', v)} placeholder="YYYY-MM-DD" />
-                                                                {status.warning && <i className="fas fa-exclamation-triangle text-orange-400 no-print ml-1" title={status.msg}></i>}
-                                                            </div>
-                                                        </td>
-                                                        <td className="p-3 text-center"><EditableCell val={t.nation} onChange={(v) => updateField(t.id, 'nation', v)} center uppercase /></td>
-                                                        <td className="p-3"><EditableCell val={t.remark} onChange={(v) => updateField(t.id, 'remark', v)} /></td>
-                                                        <td className="p-3 no-print text-center">
-                                                            <button onClick={() => removeTraveler(t.id)} className="text-slate-300 hover:text-red-500 transition px-2"><i className="fas fa-trash-alt"></i></button>
-                                                        </td>
+                                                <tr className="text-slate-800 border-t-2 border-b-2 border-slate-800 bg-transparent">
+                                                    <th className="no-print p-2 md:p-3 w-8 text-center"><i className="fas fa-sort text-slate-300"></i></th>
+                                                    <th className="p-2 md:p-3 w-10 text-center font-bold">NO</th>
+                                                    <th className="p-2 md:p-3 text-left font-bold w-[12%] whitespace-nowrap">성명</th>
+                                                    <th className="p-2 md:p-3 text-left font-bold w-[18%] whitespace-nowrap">NAME (영문명)</th>
+                                                    <th className="p-2 md:p-3 text-left font-bold w-[12%] whitespace-nowrap">생년월일</th>
+                                                    <th className="p-2 md:p-3 w-[6%] text-center font-bold whitespace-nowrap">성별</th>
+                                                    <th className="p-2 md:p-3 text-left font-bold w-[13%] whitespace-nowrap">여권번호</th>
+                                                    <th className="p-2 md:p-3 text-left font-bold w-[12%] whitespace-nowrap">여권만료일</th>
+                                                    <th className="p-2 md:p-3 text-center font-bold w-[12%] whitespace-nowrap">국적</th>
+                                                    <th className="p-2 md:p-3 text-left font-bold w-auto whitespace-nowrap">비고</th>
+                                                    <th className="p-2 md:p-3 no-print w-10 text-center font-bold">삭제</th>
+                                                </tr>
+                                            </thead>
+
+                                            <tbody className="print:table-row-group text-slate-800">
+                                                {travelers.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan="11" className="p-10 md:p-16 text-center text-xs md:text-sm text-slate-400 italic border-b border-slate-200">하단 '빈칸 1줄 추가' 버튼을 눌러 인원을 추가해 주세요.</td>
                                                     </tr>
-                                                );
-                                            })}
-                                        </tbody>
-
-                                        <tfoot className="print:table-footer-group">
-                                            <tr>
-                                                <td colSpan="11" className="no-border-top bg-white p-0 pt-8">
-                                                    <div className="border-t border-slate-300 pt-4">
-                                                        <div className="flex justify-between items-end mb-4">
-                                                            <div className="text-[11px] font-bold text-slate-500">제출일: {new Date().toLocaleDateString()}</div>
-                                                            <div className="text-right">
-                                                                <img src={TM_LOGO} className="h-6 opacity-80" alt="Tourmaker Logo" />
-                                                            </div>
-                                                        </div>
-                                                        <div className="bg-slate-50 py-4 px-6 rounded-lg text-center border border-slate-100">
-                                                            <p className="text-[11px] text-[#6c757d] leading-relaxed m-0">
-                                                                [System Powered by <a href="https://tourmaker.kr" target="_blank" rel="noreferrer" className="font-bold underline text-[#6c757d]">TOURMAKER</a>] 본 여행자 명단 시스템은 투어메이커의 기획과 트래블 테크 기술 제휴로 제작되었습니다.
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
+                                                ) : travelers.map((t, idx) => {
+                                                    const status = getExpiryStatus(t.expiry);
+                                                    return (
+                                                        <tr key={t.id} className="border-b border-slate-200 hover:bg-slate-50 transition group bg-white" draggable onDragStart={(e) => dragStart(e, idx)} onDragEnter={(e) => dragEnter(e, idx)} onDragEnd={dragEnd} onDrop={drop} onDragOver={(e) => e.preventDefault()}>
+                                                            <td className="no-print p-2 md:p-3 text-center text-slate-300 hover:text-blue-500 drag-handle" title="드래그하여 순서 변경">
+                                                                <i className="fas fa-bars"></i>
+                                                            </td>
+                                                            <td className="p-2 md:p-3 text-center text-slate-500 font-bold text-xs md:text-sm">{idx + 1}</td>
+                                                            <td className="p-1 md:p-3"><EditableCell val={t.nameKor} onChange={(v) => updateField(t.id, 'nameKor', v)} bold /></td>
+                                                            <td className="p-1 md:p-3"><EditableCell val={t.nameEng} onChange={(v) => updateField(t.id, 'nameEng', v)} uppercase /></td>
+                                                            <td className="p-1 md:p-3"><EditableCell val={t.birth} onChange={(v) => updateField(t.id, 'birth', v)} placeholder="YYYY-MM-DD" /></td>
+                                                            <td className="p-1 md:p-3 text-center">
+                                                                <select className="bg-transparent border-none outline-none cursor-pointer text-slate-700 font-bold editable-cell-input text-center" value={t.gender} onChange={(e) => updateField(t.id, 'gender', e.target.value)}>
+                                                                    <option value="M">M</option>
+                                                                    <option value="F">F</option>
+                                                                </select>
+                                                            </td>
+                                                            <td className="p-1 md:p-3"><EditableCell val={t.passportNo} onChange={(v) => updateField(t.id, 'passportNo', v)} uppercase /></td>
+                                                            <td className={`p-1 md:p-3 ${status.color}`}>
+                                                                <div className="flex items-center justify-between gap-1">
+                                                                    <EditableCell val={t.expiry} onChange={(v) => updateField(t.id, 'expiry', v)} placeholder="YYYY-MM-DD" />
+                                                                    {status.warning && <i className="fas fa-exclamation-triangle text-orange-400 no-print" title={status.msg}></i>}
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-1 md:p-3 text-center"><EditableCell val={t.nation} onChange={(v) => updateField(t.id, 'nation', v)} center uppercase /></td>
+                                                            <td className="p-1 md:p-3"><EditableCell val={t.remark} onChange={(v) => updateField(t.id, 'remark', v)} /></td>
+                                                            <td className="p-2 md:p-3 no-print text-center">
+                                                                <button onClick={() => removeTraveler(t.id)} className="text-slate-300 hover:text-red-500 transition px-1"><i className="fas fa-trash-alt"></i></button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                        
+                                        <div className="no-print mt-4 md:mt-6 flex justify-center">
+                                            <button onClick={addEmptyTraveler} className="border border-slate-300 text-slate-600 font-bold text-xs md:text-sm px-6 md:px-8 py-2 md:py-3 rounded-lg flex items-center gap-2 hover:bg-slate-100 transition shadow-sm">
+                                                <i className="fas fa-plus"></i> 빈칸 1줄 추가
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div className="no-print mt-6 flex justify-center">
-                                    <button onClick={addEmptyTraveler} className="border border-slate-300 text-slate-600 font-bold text-sm px-8 py-3 rounded-lg flex items-center gap-2 hover:bg-slate-100 transition shadow-sm">
-                                        <i className="fas fa-plus"></i> 빈칸 1줄 추가
-                                    </button>
+                                <div className="mt-auto pt-6 md:pt-8 border-t border-slate-300 print:mt-auto print:border-t-2 print:border-slate-800 print-footer w-full">
+                                    <div className="flex justify-between items-end mb-3 md:mb-4">
+                                        <div className="text-[9px] md:text-[11px] font-bold text-slate-500">제출일: {new Date().toLocaleDateString()}</div>
+                                        <div className="text-right">
+                                            <img src={TM_LOGO} className="h-5 md:h-6 opacity-80" alt="Tourmaker Logo" />
+                                        </div>
+                                    </div>
+                                    <div className="bg-[#f8f9fa] py-3 md:py-4 px-4 md:px-6 rounded-lg text-center border border-slate-100">
+                                        <p className="text-[9px] md:text-[11px] text-[#6c757d] leading-relaxed m-0">
+                                            [System Powered by <a href="https://tourmaker.kr" target="_blank" rel="noreferrer" className="font-bold underline text-[#6c757d]">TOURMAKER</a>] 본 시스템은 투어메이커의 기획과 트래블 테크 기술 제휴로 제작되었습니다.
+                                        </p>
+                                    </div>
                                 </div>
+
                             </div>
                         </div>
 
@@ -761,7 +807,7 @@
                                                             <HeaderField label="LOCATION" value={commonHeader.location} onChange={(v) => setCommonHeader({ ...commonHeader, location: v })} />
                                                             
                                                             <div className="flex items-center group w-full mt-1 md:mt-0">
-                                                                <span className="w-16 md:w-24 text-[9px] font-black text-slate-500 tracking-widest uppercase flex-shrink-0">TOTAL PAX</span>
+                                                                <span className="header-label w-16 md:w-24 text-[9px] font-black text-slate-500 tracking-widest uppercase flex-shrink-0">TOTAL PAX</span>
                                                                 <div className="text-[10px] md:text-xs font-bold text-slate-800 flex-1 flex flex-col sm:flex-row sm:items-center gap-1 md:gap-3 px-1 md:px-2">
                                                                     <div className="flex items-center gap-2">
                                                                         <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">총 인원: <span className="text-blue-600">{roomStats.total}</span>명</span>
@@ -777,7 +823,7 @@
                                                             </div>
                                                         </div>
                                                         <div className="text-left md:text-right flex-shrink-0 flex flex-col items-start md:items-end print:text-right w-full md:w-auto border-t border-slate-200 md:border-none pt-2 md:pt-0 mt-2 md:mt-0">
-                                                            <h2 className="text-xl sm:text-2xl md:text-3xl font-black italic tracking-tighter text-slate-800 leading-none">ROOMING LIST</h2>
+                                                            <h2 className="main-title text-xl sm:text-2xl md:text-3xl font-black italic tracking-tighter text-slate-800 leading-none">ROOMING LIST</h2>
                                                             {totalRoomPages > 1 && <span className="text-[9px] md:text-[10px] font-bold text-slate-400 mt-1">Page {pageIndex + 1} / {totalRoomPages}</span>}
                                                         </div>
                                                     </div>
@@ -828,10 +874,10 @@
 
         const HeaderField = ({ label, value = "", onChange, isMain = false }) => (
             <div className="flex items-center gap-1 md:gap-2 w-full">
-                <span className={`w-16 md:w-24 text-[8px] md:text-[10px] font-black text-slate-500 tracking-widest uppercase flex-shrink-0 ${isMain ? 'text-[10px] md:text-[11px]' : ''}`}>{label}</span>
+                <span className={`header-label w-16 md:w-24 text-[8px] md:text-[10px] font-black text-slate-500 tracking-widest uppercase flex-shrink-0 ${isMain ? 'text-[10px] md:text-[11px]' : ''}`}>{label}</span>
                 <input 
                     type="text" 
-                    className={`flex-1 border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none px-1 md:px-2 transition-all text-slate-800 ${isMain ? 'font-black text-base sm:text-lg md:text-xl py-0.5' : 'font-bold text-xs md:text-sm py-1'}`}
+                    className={`header-input flex-1 border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none px-1 md:px-2 transition-all text-slate-800 ${isMain ? 'font-black text-base sm:text-lg md:text-xl py-0.5' : 'font-bold text-xs md:text-sm py-1'}`}
                     value={value} 
                     onChange={(e) => onChange(e.target.value)} 
                 />
