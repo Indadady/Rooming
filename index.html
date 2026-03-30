@@ -44,7 +44,6 @@
             body { background-color: white !important; padding: 0 !important; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             
-            /* 명단 인쇄용 */
             .print-traveler-list { width: 100% !important; max-width: none !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; @page { size: A4 portrait; margin: 10mm; } }
             .print-traveler-list .table-wrapper { overflow: visible !important; width: 100% !important; }
             .print-traveler-list table { border-collapse: collapse !important; width: 100% !important; page-break-inside: auto; min-width: 0 !important; }
@@ -55,7 +54,6 @@
             .print-traveler-list th { border-top: 2px solid #1e293b !important; border-bottom: 2px solid #1e293b !important; color: #1e293b !important; }
             .print-traveler-list th.no-border-top, .print-traveler-list td.no-border-top { border: none !important; padding: 0 !important; }
             
-            /* 루밍리스트 인쇄용 */
             .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; @page { size: A4 portrait; margin: 10mm; } }
             .print-page { page-break-after: always; break-inside: avoid !important; display: flex !important; flex-direction: column !important; min-height: 277mm !important; }
             .print-page:last-child { page-break-after: auto; }
@@ -493,13 +491,6 @@
 
                             {/* 컨트롤 버튼 영역 */}
                             <div className="flex w-full md:w-auto justify-end gap-2 pt-1 md:pt-0 border-t border-slate-700 md:border-none">
-                                {/* 가이드는 공유 모드와 상관없이 루밍 탭에서 항상 노출되도록 밖으로 빼냄 */}
-                                {activeMainTab === 'rooming' && (
-                                    <button onClick={() => setIsNavMenuOpen(!isNavMenuOpen)} className="text-slate-300 hover:text-white px-2 py-1.5 text-xs font-bold transition flex items-center gap-1" title="가이드 열기/닫기">
-                                        <i className={`fas fa-chevron-${isNavMenuOpen ? 'up' : 'down'}`}></i> 가이드 {isNavMenuOpen ? '닫기' : '열기'}
-                                    </button>
-                                )}
-                                
                                 {/* 외부 공유 모드가 아닐 때만 관리자 기능 표시 */}
                                 {!isSharedMode && (
                                     <React.Fragment>
@@ -555,6 +546,7 @@
                                                         <div className="space-y-3 flex-1 w-full">
                                                             <h2 className="text-xl sm:text-3xl md:text-4xl font-black tracking-tighter text-slate-900 mt-2">OVERSEAS TRAVELERS LIST</h2>
                                                             <div className="grid grid-cols-1 gap-1 text-[10px] md:text-sm font-bold text-slate-700 max-w-full sm:max-w-[400px] md:max-w-[500px]">
+                                                                {/* 그룹명 동기화를 위해 통합 headerInfo 사용 */}
                                                                 <HeaderField label="GROUP NAME" value={commonHeader.groupName} onChange={(v) => setCommonHeader({ ...commonHeader, groupName: v })} />
                                                                 <HeaderField label="DATE" value={commonHeader.date} onChange={(v) => setCommonHeader({ ...commonHeader, date: v })} />
                                                                 <HeaderField label="NATION/LOCAL" value={commonHeader.location} onChange={(v) => setCommonHeader({ ...commonHeader, location: v })} />
@@ -658,14 +650,21 @@
                             {/* 와이드 화면 적용 (max-w-full xl:max-w-[1400px]) */}
                             <div className="w-full max-w-full xl:max-w-[1400px] mx-auto p-0 sm:p-4 md:p-6 print-rooming-list">
                                 
-                                {/* 가이드 표시 여부 (모든 모드에서 버튼으로 On/Off 가능) */}
-                                {isNavMenuOpen && (
-                                    <div className="no-print mb-4 md:mb-6">
-                                        <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm inline-flex mb-3 md:mb-4 w-full sm:w-auto">
+                                {/* 가이드 표시 여부 (모든 모드에서 작동하지만, 버튼 위치를 여기로 이동) */}
+                                <div className="no-print mb-4 md:mb-6">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 md:mb-4">
+                                        <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm w-full sm:w-auto">
                                             <button onClick={() => setIsInternationalRooming(false)} className={`flex-1 sm:flex-none px-3 md:px-4 py-1.5 rounded text-xs md:text-sm font-bold transition ${!isInternationalRooming ? 'bg-blue-50 text-blue-600' : 'text-slate-500'}`}>국내행사 (한글만)</button>
                                             <button onClick={() => setIsInternationalRooming(true)} className={`flex-1 sm:flex-none px-3 md:px-4 py-1.5 rounded text-xs md:text-sm font-bold transition ${isInternationalRooming ? 'bg-blue-50 text-blue-600' : 'text-slate-500'}`}>해외행사 (영문포함)</button>
                                         </div>
+                                        
+                                        {/* 가이드 열기/닫기 버튼을 이 위치로 이동 (공유 모드에서도 노출됨) */}
+                                        <button onClick={() => setIsNavMenuOpen(!isNavMenuOpen)} className="bg-white border border-slate-200 text-slate-600 hover:text-blue-600 px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition shadow-sm flex items-center gap-2 w-full sm:w-auto justify-center">
+                                            <i className={`fas fa-chevron-${isNavMenuOpen ? 'up' : 'down'}`}></i> 작성 가이드 {isNavMenuOpen ? '닫기' : '열기'}
+                                        </button>
+                                    </div>
 
+                                    {isNavMenuOpen && (
                                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                                             <div className="flex border-b border-slate-200">
                                                 <button onClick={() => setActiveSubTabRooming('text')} className={`flex-1 py-2.5 md:py-3 text-xs md:text-sm font-bold flex justify-center items-center gap-1.5 md:gap-2 transition ${activeSubTabRooming === 'text' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
@@ -715,8 +714,8 @@
                                                 )}
                                             </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
 
                                 <div className="space-y-6 print:space-y-0">
                                     {roomPages.map((pageRooms, pageIndex) => {
@@ -729,6 +728,7 @@
                                                 <div className="flex-1 flex flex-col">
                                                     <div className="flex flex-col md:flex-row print:flex-row justify-between items-start md:items-end border-b-2 border-slate-800 pb-2 mb-3 gap-2 md:gap-4">
                                                         <div className="space-y-1.5 flex-1 min-w-0 w-full mt-1 max-w-full md:max-w-[500px]">
+                                                            {/* 그룹명 동기화를 위해 통합 headerInfo 사용 */}
                                                             <HeaderField label="GROUP" value={commonHeader.groupName} onChange={(v) => setCommonHeader({ ...commonHeader, groupName: v })} isMain={true} />
                                                             <HeaderField label="DATE" value={commonHeader.date} onChange={(v) => setCommonHeader({ ...commonHeader, date: v })} />
                                                             <HeaderField label="LOCATION" value={commonHeader.location} onChange={(v) => setCommonHeader({ ...commonHeader, location: v })} />
@@ -759,6 +759,7 @@
                                                         {isInternationalRooming ? <p className="text-[9px] md:text-[12px] font-bold text-red-600 no-print"><i className="fas fa-exclamation-circle mr-1"></i> 한글 입력 시 자동 변환된 영문명은 실제 여권과 상이할 수 있으므로 반드시 재확인 바랍니다.</p> : <div></div>}
                                                     </div>
 
+                                                    {/* 방배정 테이블: 모바일에서는 스크롤 가능하도록 table-wrapper 추가 */}
                                                     <p className="text-[10px] text-blue-600 font-bold block md:hidden mb-2 no-print"><i className="fas fa-arrows-alt-h mr-1"></i> 표를 좌우로 스크롤하여 작성하세요.</p>
                                                     <div className="table-wrapper">
                                                         <div className="grid grid-cols-1 lg:grid-cols-2 print:grid-cols-2 gap-x-8 gap-y-4 w-full min-w-[700px] lg:min-w-0">
