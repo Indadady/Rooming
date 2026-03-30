@@ -44,6 +44,8 @@
 
     <style>
         body { font-family: 'Noto Sans KR', sans-serif; }
+        
+        /* 인쇄 최적화 CSS */
         @media print {
             .no-print { display: none !important; }
             body { background-color: white !important; }
@@ -52,18 +54,27 @@
             .print\:border-none { border: none !important; }
             .print\:m-0 { margin: 0 !important; }
             
-            /* 인쇄 시 페이지 나누기 최적화 */
+            /* 강제로 A4 비율 및 내부 잘림 완벽 방지 */
+            @page { 
+                size: A4 portrait;
+                margin: 8mm; 
+            }
+            
             .print-page { 
                 page-break-after: always; 
-                page-break-inside: avoid;
+                break-inside: avoid !important;
+                height: 280mm !important; /* A4 용지 규격에 딱 맞춤 */
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important; /* 푸터를 바닥으로 밀어냄 */
             }
+            
             .print-page:last-child { 
                 page-break-after: auto; 
             }
-            .room-table-container { break-inside: avoid; }
             
-            /* 강제 여백 제거 */
-            @page { margin: 10mm; }
+            .room-table-container { break-inside: avoid; }
+            .room-row { break-inside: avoid; }
         }
     </style>
 </head>
@@ -191,7 +202,7 @@
                 setRooms([...rooms, { id: rooms.length + 1, roomNo: '', type: 'TWIN', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }]);
             };
 
-            // --- 스마트 PDF 파일 파싱 (오직 사람 이름만 쏙쏙 뽑아내는 엔진 적용) ---
+            // --- 스마트 PDF 파일 파싱 ---
             const handleFileUpload = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -212,7 +223,6 @@
                     const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                     let fullText = '';
                     
-                    // 1. PDF의 모든 텍스트를 한 줄로 쭉 쓸어담음
                     for (let i = 1; i <= pdf.numPages; i++) {
                         const page = await pdf.getPage(i);
                         const textContent = await page.getTextContent();
@@ -221,30 +231,21 @@
                         });
                     }
                     
-                    // 2. 공백을 기준으로 텍스트 분리
                     const words = fullText.split(/[\s,\t\n]+/);
                     let extractedNames = [];
-                    
-                    // 3. 표 안에서 이름으로 오해할 수 있는 잡동사니 단어 필터링
                     const stopWords = ['성명', '이름', '투어메이커', '가이드', '객실', '번호', '베드타입', '인원수', '정보', '안내', '호텔', '프론트', '조식당', '편의점', '어메니티', '주소', '전화', '연락처', '발급', '분실'];
 
-                    // 4. 정규표현식으로 한글 이름만 추출
                     words.forEach(w => {
-                        // 영문, 숫자, 불필요한 특수기호 제거 (괄호는 성별을 위해 남김)
                         let clean = w.replace(/[0-9a-zA-Z\.\-\:\/\=\*\+\[\]\{\}\_]/g, '');
-                        clean = clean.replace(/\s/g, ''); // 내부 공백 제거
-
-                        // 길이가 2~6글자 사이이고 한글(+선택적 성별괄호)로만 이루어진 단어 매칭
+                        clean = clean.replace(/\s/g, ''); 
                         if (clean.length >= 2 && clean.length <= 6 && /^[가-힣]+(\([여남]\))?$/.test(clean)) {
                             let isStopWord = stopWords.some(stop => clean.includes(stop));
-                            // '여', '남' 같은 단일 글자가 들어오는 것 방지
                             if (!isStopWord && clean !== '여' && clean !== '남') {
                                 extractedNames.push(clean);
                             }
                         }
                     });
 
-                    // 5. 추출된 이름들을 2명씩 묶어서 텍스트창에 뿌려줌
                     if (extractedNames.length > 0) {
                         let resultText = '';
                         for (let i = 0; i < extractedNames.length; i += 2) {
@@ -272,8 +273,8 @@
                 alert("💡 안내: 명단 작성이 완료되셨나요?\n\n상단의 [인쇄 / PDF 저장] 버튼을 눌러 문서를 PDF로 저장하신 후,\n담당 투어메이커 직원에게 메일이나 카카오톡으로 전달해 주시면 감사하겠습니다!");
             };
 
-            // --- 페이징 처리 로직 (1페이지당 35객실) ---
-            const ROOMS_PER_PAGE = 35;
+            // --- 페이징 처리 로직 (절대 넘치지 않도록 안정성을 위해 1페이지당 26객실로 하향 조정) ---
+            const ROOMS_PER_PAGE = 26;
             const pages = [];
             const totalPages = Math.max(1, Math.ceil(rooms.length / ROOMS_PER_PAGE));
             for (let i = 0; i < totalPages; i++) {
@@ -378,9 +379,9 @@
                                 const pageStartIndex = pageIndex * ROOMS_PER_PAGE;
 
                                 return (
-                                    <div key={pageIndex} className="print-page bg-white shadow-lg p-5 md:p-8 border-t-[6px] border-slate-800 print:shadow-none print:p-0 print:border-none print:m-0 relative flex flex-col justify-between" style={{ minHeight: 'auto' }}>
+                                    <div key={pageIndex} className="print-page bg-white shadow-lg p-5 md:p-8 border-t-[6px] border-slate-800 print:shadow-none print:p-0 print:border-none print:m-0 relative flex flex-col justify-between" style={{ minHeight: '280mm' }}>
                                         
-                                        <div>
+                                        <div className="flex-1 flex flex-col">
                                             {/* Header */}
                                             <div className="flex flex-col md:flex-row justify-between items-end border-b-2 border-slate-800 pb-2 mb-3 gap-4">
                                                 <div className="space-y-1.5 flex-1 min-w-0 w-full mt-1">
@@ -427,9 +428,12 @@
                                                 <RoomTable rooms={leftTableRooms} startIndex={pageStartIndex} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} isInternational={isInternational} />
                                                 <RoomTable rooms={rightTableRooms} startIndex={pageStartIndex + leftTableRooms.length} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} isInternational={isInternational} />
                                             </div>
+                                            
+                                            {/* 인원이 적을 때 메모/특이사항 공간으로 자연스럽게 쓰이는 빈 공간 (flex-grow 역할) */}
+                                            <div className="flex-1"></div>
                                         </div>
 
-                                        {/* Footer Area */}
+                                        {/* Footer Area - 절대 바닥 고정 */}
                                         <div className="mt-6 pt-3 border-t border-slate-200 flex flex-col items-end">
                                             <div className="flex flex-col items-center w-full bg-[#f8f9fa] py-3 rounded">
                                                 <div className="flex items-center gap-2 mb-1.5">
@@ -449,7 +453,7 @@
                             })}
                         </div>
                         
-                        {/* 명단 없이 빈 방 추가하는 명시적 버튼 (새로 추가된 부분) */}
+                        {/* 명단 없이 빈 방 추가하는 명시적 버튼 */}
                         <div className="mt-8 no-print flex justify-center">
                             <button 
                                 onClick={addRoom} 
@@ -488,7 +492,7 @@
                 {rooms.map((room, rIdx) => {
                     const actualIdx = startIndex + rIdx;
                     return (
-                        <div key={actualIdx} className="grid grid-cols-[40px_1fr_100px] border-b border-slate-200 group relative min-h-[40px]">
+                        <div key={actualIdx} className="room-row grid grid-cols-[40px_1fr_100px] border-b border-slate-200 group relative min-h-[40px]">
                             {/* 룸 인덱스 & 타입 */}
                             <div className="flex flex-col items-center justify-center bg-slate-50 border-r border-slate-100 py-1">
                                 <span className="text-[11px] font-black text-slate-800">{actualIdx + 1}</span>
