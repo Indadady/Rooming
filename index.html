@@ -123,7 +123,7 @@
             .room-grid { grid-template-columns: 8% 12% 1fr 25%; }
         }
 
-        /* [핵심] 입력 안내글씨(Placeholder) 자동 숨김 처리 (웹 & 인쇄 모두 깔끔하게) */
+        /* 입력 안내글씨(Placeholder) 자동 숨김 처리 (웹 & 인쇄 모두 깔끔하게) */
         .room-row input::placeholder { color: transparent !important; transition: color 0.2s ease-in-out; }
         .room-row:hover input::placeholder, .room-row input:focus::placeholder { color: #cbd5e1 !important; }
         
@@ -161,6 +161,9 @@
             return `${engFamily} ${engGiven}`.trim(); 
         };
 
+        // ==========================================
+        // 1. 서브 컴포넌트 (렌더링 최적화 및 포커스 유지를 위해 App 외부로 완벽 분리)
+        // ==========================================
         const AutoResizeTextarea = ({ value, onChange, placeholder, minRows = 4 }) => {
             const textareaRef = useRef(null);
             const handleChange = (e) => onChange(e.target.value);
@@ -173,16 +176,98 @@
             return <textarea ref={textareaRef} className="w-full p-3 md:p-4 text-xs md:text-sm bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition font-mono leading-relaxed resize-none overflow-hidden" placeholder={placeholder} value={value} onChange={handleChange} rows={minRows} />;
         };
 
+        const HeaderField = ({ label, value = "", onChange, isMain = false, fontSize, placeholder = "" }) => (
+            <div className="flex items-center gap-2 print:gap-4 w-full">
+                <span className={`font-black text-slate-500 tracking-widest uppercase flex-shrink-0 whitespace-nowrap`} 
+                      style={{ fontSize: `${isMain ? Math.max(9, fontSize - 1) : Math.max(8, fontSize - 1.5)}pt`, width: `${Math.max(140, fontSize * 11)}px` }}>
+                    {label}
+                </span>
+                <input 
+                    type="text" 
+                    className={`flex-1 border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none px-2 transition-all text-slate-800 ${isMain ? 'font-black' : 'font-bold'}`}
+                    style={{ fontSize: `${isMain ? fontSize + 4 : fontSize}pt` }}
+                    value={value} 
+                    placeholder={placeholder}
+                    onChange={(e) => onChange(e.target.value)} 
+                />
+            </div>
+        );
+
+        const EditableCell = ({ val = "", onChange, bold = false, uppercase = false, placeholder = '', center = false, fontSize }) => (
+            <input 
+                type="text"
+                title="클릭하여 내용을 수정하세요"
+                className={`editable-cell-input bg-transparent outline-none border-b border-transparent focus:border-blue-400 p-0 m-0 ${bold ? 'font-black text-slate-900' : ''} ${uppercase ? 'uppercase' : ''} ${center ? 'text-center' : 'text-left'}`}
+                style={{ fontSize: 'inherit' }}
+                value={val}
+                placeholder={placeholder}
+                onChange={(e) => onChange(e.target.value)}
+            />
+        );
+
+        const RoomRow = ({ room, actualIdx, globalIdx, updateRoom, updateGuest, changeRoomType, removeRoom, dragRoomStart, dragRoomEnter, dragRoomEnd, dropRoom, fontSize, isInternationalRooming }) => (
+            <div
+                /* [핵심] 모든 테두리 굵기를 1px(border-slate-200)로 통일하여 불규칙한 선 제거 */
+                className="room-row room-grid border-b border-slate-200 group relative bg-white items-stretch"
+                style={{ breakInside: 'avoid' }}
+                draggable
+                onDragStart={(e) => dragRoomStart(e, globalIdx)}
+                onDragEnter={(e) => dragRoomEnter(e, globalIdx)}
+                onDragEnd={dragRoomEnd}
+                onDrop={dropRoom}
+                onDragOver={(e) => e.preventDefault()}
+            >
+                <div className="no-print flex items-center justify-center border-r border-slate-200 text-slate-300 hover:text-blue-500 drag-handle" title="드래그하여 방 순서 변경">
+                    <i className="fas fa-bars"></i>
+                </div>
+
+                <div className="flex items-center justify-center border-r border-slate-200 py-1">
+                    <span className="font-bold text-slate-500 text-center" style={{ fontSize: `${fontSize}pt` }}>{actualIdx + 1}</span>
+                </div>
+
+                <div className="flex items-center justify-center border-r border-slate-200 py-1 px-1">
+                    <select className="font-bold text-slate-700 bg-transparent outline-none cursor-pointer w-full text-center" style={{ fontSize: `${Math.max(8, fontSize - 1)}pt` }} value={room.type} onChange={(e) => changeRoomType(globalIdx, e.target.value)}>
+                        <option value="TWIN">TWN</option><option value="TRIPLE">TRP</option><option value="SINGLE">SGL</option><option value="QUAD">QUAD</option>
+                    </select>
+                </div>
+
+                <div className="flex flex-col py-0.5 bg-white min-w-0 border-r border-slate-200">
+                    {room.guests.map((g, gIdx) => (
+                        <div key={gIdx} className={`flex flex-col px-1.5 md:px-2 py-1 ${gIdx > 0 ? 'border-t border-dashed border-slate-200' : ''}`} style={{ padding: `${fontSize/2.5}px 4px` }}>
+                            <div className="flex items-center gap-1 md:gap-2 w-full">
+                                <input className="font-bold outline-none bg-transparent focus:text-blue-600" style={{ fontSize: `${fontSize}pt`, width: `${fontSize * 4.5}px` }} value={g.name} placeholder="이름" onChange={(e) => updateGuest(globalIdx, gIdx, 'name', e.target.value)} />
+                                <button type="button" onClick={() => updateGuest(globalIdx, gIdx, 'gender', g.gender === '남' ? '여' : '남')} className={`flex-shrink-0 font-bold px-1.5 py-0.5 rounded cursor-pointer ${g.gender === '여' ? 'bg-pink-50 text-pink-600' : 'bg-blue-50 text-blue-600'}`} style={{ fontSize: `${Math.max(8, fontSize - 2)}pt` }}>
+                                    {g.gender}
+                                </button>
+                                <input className="flex-1 min-w-[30px] text-slate-500 outline-none bg-transparent col-remark" style={{ fontSize: `${Math.max(9, fontSize - 1)}pt` }} placeholder="" value={g.remark} onChange={(e) => updateGuest(globalIdx, gIdx, 'remark', e.target.value)} />
+                            </div>
+                            {isInternationalRooming && (
+                                <input className="font-bold tracking-wide text-slate-500 outline-none uppercase bg-transparent w-full mt-0.5" style={{ fontSize: `${Math.max(8, fontSize - 1.5)}pt` }} placeholder="ENGLISH NAME" value={g.engName} onChange={(e) => updateGuest(globalIdx, gIdx, 'engName', e.target.value)} />
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+                <div className="flex items-center justify-center p-1 bg-white min-w-0 relative">
+                    <input className="w-full text-center font-bold text-slate-600 bg-transparent outline-none" style={{ fontSize: `${fontSize}pt` }} placeholder="추후 배정" value={room.roomNo} onChange={(e) => updateRoom(globalIdx, 'roomNo', e.target.value)} />
+                    <button type="button" onClick={() => removeRoom(globalIdx)} className="no-print absolute -right-4 top-1/2 -translate-y-1/2 p-1.5 bg-white border border-slate-200 rounded-full text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 z-10 shadow-sm"><i className="fas fa-trash-alt" style={{ fontSize: `${Math.max(8, fontSize - 2)}pt` }}></i></button>
+                </div>
+            </div>
+        );
+
+        // ==========================================
+        // 2. 메인 컴포넌트 (App)
+        // ==========================================
         const App = () => {
             const isInitialShared = useMemo(() => new URLSearchParams(window.location.search).get('shared') === 'true', []);
             const [isSharedMode, setIsSharedMode] = useState(isInitialShared);
             const [activeMainTab, setActiveMainTab] = useState(isInitialShared ? 'rooming' : 'traveler');
             const [isNavMenuOpen, setIsNavMenuOpen] = useState(true);
 
-            // 폰트 스케일링 (A4 최적화 기준 10.5pt 설정)
+            // 폰트 스케일링
             const [docFontSize, setDocFontSize] = useState(10.5); 
 
-            // 통합 헤더 정보 (범용 템플릿용 빈칸 초기화)
+            // 통합 헤더 정보
             const [commonHeader, setCommonHeader] = useState({ groupName: "", date: "", location: "", number: "" });
 
             // ==========================================
@@ -460,87 +545,6 @@
             };
 
             // ==========================================
-            // 서브 컴포넌트
-            // ==========================================
-            const HeaderField = ({ label, value = "", onChange, isMain = false, fontSize, placeholder = "" }) => (
-                <div className="flex items-center gap-2 print:gap-4 w-full">
-                    <span className={`font-black text-slate-500 tracking-widest uppercase flex-shrink-0 whitespace-nowrap`} 
-                          style={{ fontSize: `${isMain ? Math.max(9, fontSize - 1) : Math.max(8, fontSize - 1.5)}pt`, width: `${Math.max(140, fontSize * 11)}px` }}>
-                        {label}
-                    </span>
-                    <input 
-                        type="text" 
-                        className={`flex-1 border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none px-2 transition-all text-slate-800 ${isMain ? 'font-black' : 'font-bold'}`}
-                        style={{ fontSize: `${isMain ? fontSize + 4 : fontSize}pt` }}
-                        value={value} 
-                        placeholder={placeholder}
-                        onChange={(e) => onChange(e.target.value)} 
-                    />
-                </div>
-            );
-
-            const EditableCell = ({ val = "", onChange, bold = false, uppercase = false, placeholder = '', center = false, fontSize }) => (
-                <input 
-                    type="text"
-                    title="클릭하여 내용을 수정하세요"
-                    className={`editable-cell-input bg-transparent outline-none border-b border-transparent focus:border-blue-400 p-0 m-0 ${bold ? 'font-black text-slate-900' : ''} ${uppercase ? 'uppercase' : ''} ${center ? 'text-center' : 'text-left'}`}
-                    style={{ fontSize: 'inherit' }}
-                    value={val}
-                    placeholder={placeholder}
-                    onChange={(e) => onChange(e.target.value)}
-                />
-            );
-
-            const RoomRow = ({ room, actualIdx, globalIdx }) => (
-                <div
-                    className="room-row room-grid border-b border-slate-200 group relative bg-white items-stretch"
-                    style={{ breakInside: 'avoid' }}
-                    draggable
-                    onDragStart={(e) => dragRoomStart(e, globalIdx)}
-                    onDragEnter={(e) => dragRoomEnter(e, globalIdx)}
-                    onDragEnd={dragRoomEnd}
-                    onDrop={dropRoom}
-                    onDragOver={(e) => e.preventDefault()}
-                >
-                    <div className="no-print flex items-center justify-center border-r border-slate-200 text-slate-300 hover:text-blue-500 drag-handle" title="드래그하여 방 순서 변경">
-                        <i className="fas fa-bars"></i>
-                    </div>
-
-                    <div className="flex items-center justify-center border-r border-slate-200 py-1">
-                        <span className="font-bold text-slate-500 text-center" style={{ fontSize: `${docFontSize}pt` }}>{actualIdx + 1}</span>
-                    </div>
-
-                    <div className="flex items-center justify-center border-r border-slate-200 py-1 px-1">
-                        <select className="font-bold text-slate-700 bg-transparent outline-none cursor-pointer w-full text-center" style={{ fontSize: `${Math.max(8, docFontSize - 1)}pt` }} value={room.type} onChange={(e) => changeRoomType(globalIdx, e.target.value)}>
-                            <option value="TWIN">TWN</option><option value="TRIPLE">TRP</option><option value="SINGLE">SGL</option><option value="QUAD">QUAD</option>
-                        </select>
-                    </div>
-
-                    <div className="flex flex-col py-0.5 bg-white min-w-0 border-r border-slate-200">
-                        {room.guests.map((g, gIdx) => (
-                            <div key={gIdx} className={`flex flex-col px-1.5 md:px-2 py-1 ${gIdx > 0 ? 'border-t border-dashed border-slate-200' : ''}`} style={{ padding: `${docFontSize/2.5}px 4px` }}>
-                                <div className="flex items-center gap-1 md:gap-2 w-full">
-                                    <input className="font-bold outline-none bg-transparent focus:text-blue-600" style={{ fontSize: `${docFontSize}pt`, width: `${docFontSize * 4.5}px` }} value={g.name} placeholder="이름" onChange={(e) => updateGuest(globalIdx, gIdx, 'name', e.target.value)} />
-                                    <button type="button" onClick={() => updateGuest(globalIdx, gIdx, 'gender', g.gender === '남' ? '여' : '남')} className={`flex-shrink-0 font-bold px-1.5 py-0.5 rounded cursor-pointer ${g.gender === '여' ? 'bg-pink-50 text-pink-600' : 'bg-blue-50 text-blue-600'}`} style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>
-                                        {g.gender}
-                                    </button>
-                                    <input className="flex-1 min-w-[30px] text-slate-500 outline-none bg-transparent col-remark" style={{ fontSize: `${Math.max(9, docFontSize - 1)}pt` }} placeholder="비고" value={g.remark} onChange={(e) => updateGuest(globalIdx, gIdx, 'remark', e.target.value)} />
-                                </div>
-                                {isInternationalRooming && (
-                                    <input className="font-medium tracking-wide text-slate-400 outline-none uppercase bg-transparent w-full mt-0.5" style={{ fontSize: `${Math.max(8, docFontSize - 1.5)}pt` }} placeholder="ENGLISH NAME" value={g.engName} onChange={(e) => updateGuest(globalIdx, gIdx, 'engName', e.target.value)} />
-                                )}
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="flex items-center justify-center p-1 bg-white min-w-0 relative">
-                        <input className="w-full text-center font-bold text-slate-600 bg-transparent outline-none" style={{ fontSize: `${docFontSize}pt` }} placeholder="추후 배정" value={room.roomNo} onChange={(e) => updateRoom(globalIdx, 'roomNo', e.target.value)} />
-                        <button type="button" onClick={() => removeRoom(globalIdx)} className="no-print absolute -right-4 top-1/2 -translate-y-1/2 p-1.5 bg-white border border-slate-200 rounded-full text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 z-10 shadow-sm"><i className="fas fa-trash-alt" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}></i></button>
-                    </div>
-                </div>
-            );
-
-            // ==========================================
             // 렌더링 시작
             // ==========================================
             return (
@@ -621,8 +625,24 @@
                             {travelerPages.map((page) => (
                                 <div key={page.pageIndex} className="print-page bg-white w-full max-w-full xl:max-w-[1400px] mx-auto shadow-xl p-3 sm:p-5 md:p-8 xl:px-12 flex flex-col justify-between border border-slate-200 mb-8" style={{ minHeight: '277mm' }}>
                                     
-                                    <div className="w-full">
-                                        <div className="table-wrapper w-full relative">
+                                    <div className="w-full flex-1 flex flex-col">
+                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-[3px] border-slate-900 pb-3 md:pb-4 mb-3 gap-4">
+                                            <div className="space-y-3 flex-1 w-full">
+                                                <h2 className="font-black tracking-tighter text-slate-900 mt-2" style={{ fontSize: `${docFontSize * 2.2}pt` }}>OVERSEAS TRAVELERS LIST</h2>
+                                                <div className="flex flex-col gap-1.5 font-bold text-slate-700 w-full print:max-w-none max-w-full sm:max-w-[600px]">
+                                                    <HeaderField label="GROUP NAME" value={commonHeader.groupName} onChange={(v) => setCommonHeader({ ...commonHeader, groupName: v })} fontSize={docFontSize} placeholder="소속 기관 및 단체명 입력" />
+                                                    <HeaderField label="DATE" value={commonHeader.date} onChange={(v) => setCommonHeader({ ...commonHeader, date: v })} fontSize={docFontSize} placeholder="YYYY.MM.DD - YYYY.MM.DD" />
+                                                    <HeaderField label="NATION/LOCAL" value={commonHeader.location} onChange={(v) => setCommonHeader({ ...commonHeader, location: v })} fontSize={docFontSize} placeholder="방문 국가 및 지역 입력" />
+                                                    <HeaderField label="NUMBER" value={commonHeader.number} onChange={(v) => setCommonHeader({ ...commonHeader, number: v })} fontSize={docFontSize} placeholder="총 인원수 입력 (예: 20명)" />
+                                                </div>
+                                            </div>
+                                            <div className="text-left sm:text-right flex flex-col items-start sm:items-end w-full sm:w-auto self-end">
+                                                <div className="text-red-500 font-black italic mb-1 md:mb-0 bg-red-50 px-3 py-1 border border-red-200" style={{ fontSize: `${Math.max(9, docFontSize - 1)}pt` }}>여권 만료일 최소 6개월 이상</div>
+                                                {totalTravelerPages > 1 && <div className="mt-2 text-slate-500 font-bold" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>Page {page.pageIndex + 1} / {totalTravelerPages}</div>}
+                                            </div>
+                                        </div>
+
+                                        <div className="table-wrapper w-full relative flex-1">
                                             {/* 표 아래선 굵게 마감하여 데이터 끝났음을 명확히 표시 */}
                                             <table className="w-full border-collapse min-w-[900px] border-b-[3px] border-slate-800" style={{ fontSize: `${docFontSize}pt`, tableLayout: 'fixed' }}>
                                                 <colgroup>
@@ -640,37 +660,18 @@
                                                 </colgroup>
 
                                                 <thead className="print:table-header-group">
-                                                    <tr>
-                                                        <th colSpan="11" className="no-border-top bg-white p-0 pt-2 pb-4 md:pb-6 text-left">
-                                                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-[3px] border-slate-900 pb-3 md:pb-4 mb-2 gap-4">
-                                                                <div className="space-y-3 flex-1 w-full">
-                                                                    <h2 className="font-black tracking-tighter text-slate-900 mt-2" style={{ fontSize: `${docFontSize * 2.2}pt` }}>OVERSEAS TRAVELERS LIST</h2>
-                                                                    <div className="flex flex-col gap-1.5 font-bold text-slate-700 w-full print:max-w-none max-w-full sm:max-w-[600px]">
-                                                                        <HeaderField label="GROUP NAME" value={commonHeader.groupName} onChange={(v) => setCommonHeader({ ...commonHeader, groupName: v })} fontSize={docFontSize} placeholder="소속 기관 및 단체명 입력" />
-                                                                        <HeaderField label="DATE" value={commonHeader.date} onChange={(v) => setCommonHeader({ ...commonHeader, date: v })} fontSize={docFontSize} placeholder="YYYY.MM.DD - YYYY.MM.DD" />
-                                                                        <HeaderField label="NATION/LOCAL" value={commonHeader.location} onChange={(v) => setCommonHeader({ ...commonHeader, location: v })} fontSize={docFontSize} placeholder="방문 국가 및 지역 입력" />
-                                                                        <HeaderField label="NUMBER" value={commonHeader.number} onChange={(v) => setCommonHeader({ ...commonHeader, number: v })} fontSize={docFontSize} placeholder="총 인원수 입력 (예: 20명)" />
-                                                                    </div>
-                                                                </div>
-                                                                <div className="text-left sm:text-right flex flex-col items-start sm:items-end w-full sm:w-auto self-end">
-                                                                    <div className="text-red-500 font-black italic mb-1 md:mb-0 bg-red-50 px-3 py-1 border border-red-200" style={{ fontSize: `${Math.max(9, docFontSize - 1)}pt` }}>여권 만료일 최소 6개월 이상</div>
-                                                                    {totalTravelerPages > 1 && <div className="mt-2 text-slate-500 font-bold" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>Page {page.pageIndex + 1} / {totalTravelerPages}</div>}
-                                                                </div>
-                                                            </div>
-                                                        </th>
-                                                    </tr>
-                                                    <tr className="text-slate-800 border-t-2 border-b-2 border-slate-800 bg-transparent">
-                                                        <th className="no-print text-center"><i className="fas fa-sort text-slate-300"></i></th>
-                                                        <th className="text-center font-bold">NO</th>
-                                                        <th className="text-center font-bold">성명</th>
-                                                        <th className="text-left font-bold pl-2">NAME</th>
-                                                        <th className="text-center font-bold">생년월일</th>
-                                                        <th className="text-center font-bold">성별</th>
-                                                        <th className="text-center font-bold">여권번호</th>
-                                                        <th className="text-center font-bold whitespace-nowrap">여권만료일</th>
-                                                        <th className="text-center font-bold">국적</th>
-                                                        <th className="text-left font-bold">기타</th>
-                                                        <th className="no-print text-center font-bold">삭제</th>
+                                                    <tr className="text-slate-800 border-b-2 border-slate-800 bg-transparent">
+                                                        <th className="no-print text-center py-2"><i className="fas fa-sort text-slate-300"></i></th>
+                                                        <th className="text-center font-bold py-2">NO</th>
+                                                        <th className="text-center font-bold py-2">성명</th>
+                                                        <th className="text-left font-bold pl-2 py-2">NAME</th>
+                                                        <th className="text-center font-bold py-2">생년월일</th>
+                                                        <th className="text-center font-bold py-2">성별</th>
+                                                        <th className="text-center font-bold py-2">여권번호</th>
+                                                        <th className="text-center font-bold whitespace-nowrap py-2">여권만료일</th>
+                                                        <th className="text-center font-bold py-2">국적</th>
+                                                        <th className="text-left font-bold py-2">기타</th>
+                                                        <th className="no-print text-center font-bold py-2">삭제</th>
                                                     </tr>
                                                 </thead>
 
@@ -754,7 +755,7 @@
                         </div>
 
                         {/* ========================================================================= */}
-                        {/* TAB 2: 방 배정 (루밍리스트) - 완벽한 단일 표(Table) 구조로 개편 */}
+                        {/* TAB 2: 방 배정 (루밍리스트) */}
                         {/* ========================================================================= */}
                         <div className={activeMainTab === 'rooming' ? 'block' : 'hidden'}>
                             <div className="w-full max-w-full xl:max-w-[1400px] mx-auto p-0 sm:p-4 md:p-6 print-rooming-list">
@@ -834,7 +835,6 @@
 
                                 <div className="space-y-6 print:space-y-0">
                                     {roomPages.map((pageRooms, pageIndex) => {
-                                        // 페이지 분할 (좌측 단 / 우측 단)
                                         const leftTableRooms = pageRooms.slice(0, Math.ceil(pageRooms.length / 2));
                                         const rightTableRooms = pageRooms.slice(Math.ceil(pageRooms.length / 2));
                                         const pageStartIndex = pageIndex * ROOMS_PER_PAGE;
@@ -874,32 +874,40 @@
                                                         {isInternationalRooming ? <p className="font-bold text-red-600 no-print" style={{ fontSize: `${Math.max(9, docFontSize - 1)}pt` }}><i className="fas fa-exclamation-circle mr-1"></i> 한글 입력 시 자동 변환된 영문명은 실제 여권과 상이할 수 있으므로 반드시 재확인 바랍니다.</p> : <div></div>}
                                                     </div>
 
-                                                    {/* [핵심] 튼튼해진 표구조 & 깔끔해진 내부 선(Border) 적용 */}
                                                     <div className="table-wrapper flex-1 w-full relative">
                                                         <div className="w-full border-t-[2px] border-slate-800 border-b-[3px] flex flex-col bg-white">
                                                             
-                                                            {/* 표 헤더 */}
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 print:grid-cols-2 w-full border-b-[2px] border-slate-800 text-slate-800 font-bold" style={{ fontSize: `${Math.max(8, docFontSize - 1)}pt` }}>
-                                                                <div className="room-grid text-center py-2 items-center">
-                                                                    <div className="no-print"><i className="fas fa-sort text-slate-300"></i></div>
-                                                                    <div>NO</div><div>TYPE</div><div className="text-left pl-2">GUEST INFO</div><div>ROOM NO</div>
+                                                            {/* [핵심해결] 표 헤더 영역: 
+                                                                 1. 내부 세로선을 바디와 동일하게 `border-slate-200`으로 긋기 
+                                                                 2. 우측 컬럼의 왼쪽 기준점(border-l-[2px])을 바디 영역과 100% 동일하게 통일 */}
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 print:grid-cols-2 w-full border-b-[2px] border-slate-800 text-slate-800 font-bold bg-slate-50" style={{ fontSize: `${Math.max(8, docFontSize - 1)}pt` }}>
+                                                                <div className="room-grid text-center items-stretch">
+                                                                    <div className="no-print flex items-center justify-center py-2 border-r border-slate-200"><i className="fas fa-sort text-slate-300"></i></div>
+                                                                    <div className="flex items-center justify-center py-2 border-r border-slate-200">NO</div>
+                                                                    <div className="flex items-center justify-center py-2 border-r border-slate-200">TYPE</div>
+                                                                    <div className="flex items-center justify-start pl-2 py-2 border-r border-slate-200">GUEST INFO</div>
+                                                                    <div className="flex items-center justify-center py-2">ROOM NO</div>
                                                                 </div>
-                                                                <div className="room-grid text-center py-2 items-center md:border-l-[2px] print:border-l-[2px] border-slate-800 hidden md:grid print:grid">
-                                                                    <div className="no-print"><i className="fas fa-sort text-slate-300"></i></div>
-                                                                    <div>NO</div><div>TYPE</div><div className="text-left pl-2">GUEST INFO</div><div>ROOM NO</div>
+                                                                <div className="room-grid text-center items-stretch md:border-l-[2px] print:border-l-[2px] border-slate-800 hidden md:grid print:grid">
+                                                                    <div className="no-print flex items-center justify-center py-2 border-r border-slate-200"><i className="fas fa-sort text-slate-300"></i></div>
+                                                                    <div className="flex items-center justify-center py-2 border-r border-slate-200">NO</div>
+                                                                    <div className="flex items-center justify-center py-2 border-r border-slate-200">TYPE</div>
+                                                                    <div className="flex items-center justify-start pl-2 py-2 border-r border-slate-200">GUEST INFO</div>
+                                                                    <div className="flex items-center justify-center py-2">ROOM NO</div>
                                                                 </div>
                                                             </div>
 
-                                                            {/* 표 바디 (중앙 분리선 두껍게 처리) */}
+                                                            {/* 표 바디 영역 */}
                                                             <div className="grid grid-cols-1 md:grid-cols-2 print:grid-cols-2 w-full">
-                                                                <div className="flex flex-col md:border-r-[2px] print:border-r-[2px] border-slate-800">
+                                                                <div className="flex flex-col">
                                                                     {leftTableRooms.map((room, rIdx) => (
-                                                                        <RoomRow key={room.id} room={room} actualIdx={pageStartIndex + rIdx} globalIdx={rooms.findIndex(r => r.id === room.id)} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} />
+                                                                        <RoomRow key={room.id} room={room} actualIdx={pageStartIndex + rIdx} globalIdx={rooms.findIndex(r => r.id === room.id)} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} />
                                                                     ))}
                                                                 </div>
-                                                                <div className="flex flex-col">
+                                                                {/* [핵심해결] 우측 컬럼 컨테이너의 좌측 벽에 굵은 테두리(border-l-[2px])를 주어 헤더와 딱 떨어지게 마감 */}
+                                                                <div className="flex flex-col md:border-l-[2px] print:border-l-[2px] border-slate-800">
                                                                     {rightTableRooms.map((room, rIdx) => (
-                                                                        <RoomRow key={room.id} room={room} actualIdx={pageStartIndex + leftTableRooms.length + rIdx} globalIdx={rooms.findIndex(r => r.id === room.id)} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} />
+                                                                        <RoomRow key={room.id} room={room} actualIdx={pageStartIndex + leftTableRooms.length + rIdx} globalIdx={rooms.findIndex(r => r.id === room.id)} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} />
                                                                     ))}
                                                                 </div>
                                                             </div>
@@ -939,86 +947,6 @@
                 </div>
             );
         };
-
-        const HeaderField = ({ label, value = "", onChange, isMain = false, fontSize, placeholder = "" }) => (
-            <div className="flex items-center gap-2 print:gap-4 w-full">
-                <span className={`font-black text-slate-500 tracking-widest uppercase flex-shrink-0 whitespace-nowrap`} 
-                      style={{ fontSize: `${isMain ? Math.max(9, fontSize - 1) : Math.max(8, fontSize - 1.5)}pt`, width: `${Math.max(140, fontSize * 11)}px` }}>
-                    {label}
-                </span>
-                <input 
-                    type="text" 
-                    className={`flex-1 border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none px-2 transition-all text-slate-800 ${isMain ? 'font-black' : 'font-bold'}`}
-                    style={{ fontSize: `${isMain ? fontSize + 4 : fontSize}pt` }}
-                    value={value} 
-                    placeholder={placeholder}
-                    onChange={(e) => onChange(e.target.value)} 
-                />
-            </div>
-        );
-
-        const EditableCell = ({ val = "", onChange, bold = false, uppercase = false, placeholder = '', center = false, fontSize }) => (
-            <input 
-                type="text"
-                title="클릭하여 내용을 수정하세요"
-                className={`editable-cell-input bg-transparent outline-none border-b border-transparent focus:border-blue-400 p-0 m-0 ${bold ? 'font-black text-slate-900' : ''} ${uppercase ? 'uppercase' : ''} ${center ? 'text-center' : 'text-left'}`}
-                style={{ fontSize: 'inherit' }}
-                value={val}
-                placeholder={placeholder}
-                onChange={(e) => onChange(e.target.value)}
-            />
-        );
-
-        const RoomRow = ({ room, actualIdx, globalIdx }) => (
-            <div
-                className="room-row room-grid border-b border-slate-200 group relative bg-white items-stretch"
-                style={{ breakInside: 'avoid' }}
-                draggable
-                onDragStart={(e) => dragRoomStart(e, globalIdx)}
-                onDragEnter={(e) => dragRoomEnter(e, globalIdx)}
-                onDragEnd={dragRoomEnd}
-                onDrop={dropRoom}
-                onDragOver={(e) => e.preventDefault()}
-            >
-                <div className="no-print flex items-center justify-center border-r border-slate-200 text-slate-300 hover:text-blue-500 drag-handle" title="드래그하여 방 순서 변경">
-                    <i className="fas fa-bars"></i>
-                </div>
-
-                <div className="flex items-center justify-center border-r border-slate-200 py-1">
-                    <span className="font-bold text-slate-500 text-center" style={{ fontSize: `${docFontSize}pt` }}>{actualIdx + 1}</span>
-                </div>
-
-                <div className="flex items-center justify-center border-r border-slate-200 py-1 px-1">
-                    <select className="font-bold text-slate-700 bg-transparent outline-none cursor-pointer w-full text-center" style={{ fontSize: `${Math.max(8, docFontSize - 1)}pt` }} value={room.type} onChange={(e) => changeRoomType(globalIdx, e.target.value)}>
-                        <option value="TWIN">TWN</option><option value="TRIPLE">TRP</option><option value="SINGLE">SGL</option><option value="QUAD">QUAD</option>
-                    </select>
-                </div>
-
-                <div className="flex flex-col py-0.5 bg-white min-w-0 border-r border-slate-200">
-                    {room.guests.map((g, gIdx) => (
-                        /* [핵심] 한 방안에 여러 명일 경우 분리선을 '점선(dashed)'으로 처리하여 세련미 확보 */
-                        <div key={gIdx} className={`flex flex-col px-1.5 md:px-2 py-1 ${gIdx > 0 ? 'border-t border-dashed border-slate-200' : ''}`} style={{ padding: `${docFontSize/2.5}px 4px` }}>
-                            <div className="flex items-center gap-1 md:gap-2 w-full">
-                                <input className="font-bold outline-none bg-transparent focus:text-blue-600" style={{ fontSize: `${docFontSize}pt`, width: `${docFontSize * 4.5}px` }} value={g.name} placeholder="이름" onChange={(e) => updateGuest(globalIdx, gIdx, 'name', e.target.value)} />
-                                <button type="button" onClick={() => updateGuest(globalIdx, gIdx, 'gender', g.gender === '남' ? '여' : '남')} className={`flex-shrink-0 font-bold px-1.5 py-0.5 rounded cursor-pointer ${g.gender === '여' ? 'bg-pink-50 text-pink-600' : 'bg-blue-50 text-blue-600'}`} style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>
-                                    {g.gender}
-                                </button>
-                                {/* [핵심] 비고란 placeholder("비고") 텍스트 자체를 삭제하여 완벽한 백지 구현 */}
-                                <input className="flex-1 min-w-[30px] text-slate-500 outline-none bg-transparent col-remark" style={{ fontSize: `${Math.max(9, docFontSize - 1)}pt` }} placeholder="" value={g.remark} onChange={(e) => updateGuest(globalIdx, gIdx, 'remark', e.target.value)} />
-                            </div>
-                            {isInternationalRooming && (
-                                <input className="font-bold tracking-wide text-slate-500 outline-none uppercase bg-transparent w-full mt-0.5" style={{ fontSize: `${Math.max(8, docFontSize - 1.5)}pt` }} placeholder="ENGLISH NAME" value={g.engName} onChange={(e) => updateGuest(globalIdx, gIdx, 'engName', e.target.value)} />
-                            )}
-                        </div>
-                    ))}
-                </div>
-
-                <div className="flex items-center justify-center p-1 bg-white min-w-0 relative">
-                    <input className="w-full text-center font-bold text-slate-600 bg-transparent outline-none" style={{ fontSize: `${docFontSize}pt` }} placeholder="추후 배정" value={room.roomNo} onChange={(e) => updateRoom(globalIdx, 'roomNo', e.target.value)} />
-                    <button type="button" onClick={() => removeRoom(globalIdx)} className="no-print absolute -right-4 top-1/2 -translate-y-1/2 p-1.5 bg-white border border-slate-200 rounded-full text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 z-10 shadow-sm"><i className="fas fa-trash-alt" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}></i></button>
-                </div>
-            </div>
-        );
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
