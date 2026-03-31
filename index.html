@@ -26,6 +26,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script>window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';</script>
 
+    <!-- SheetJS (엑셀 파일 생성 및 업로드 파싱용 - 스타일 완벽 지원 엔진으로 교체) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+
     <!-- Google Analytics (GA4) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-JLH9GD9SVR"></script>
     <script>
@@ -88,7 +91,6 @@
             /* --- 방배정 인쇄용 --- */
             .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; display: flex !important; flex-direction: column !important; }
             .room-table-container, .room-row { break-inside: avoid; }
-            /* [개선] 인쇄 시 불필요한 내부 border-bottom 충돌 완전 제거 */
             .room-row { padding: 0 !important; }
             
             input, select, textarea { border: none !important; background: transparent !important; appearance: none; -webkit-appearance: none; }
@@ -118,13 +120,13 @@
         /* 고정 행 높이 (황금비율 유지를 위한 필수값) */
         .fixed-row-height { height: 36px; } 
 
-        /* 방배정 전용 황금비율 그리드 (드래그 영역 35px 고정, 나머지 비율 분배) */
+        /* 방배정 전용 황금비율 그리드 */
         .room-grid { display: grid; grid-template-columns: 35px 8% 12% 1fr 25%; align-items: stretch; }
         @media print {
             .room-grid { grid-template-columns: 8% 12% 1fr 25%; }
         }
 
-        /* 입력 안내글씨(Placeholder) 자동 숨김 처리 (웹 & 인쇄 모두 깔끔하게) */
+        /* 입력 안내글씨(Placeholder) 자동 숨김 처리 */
         .room-row input::placeholder { color: transparent !important; transition: color 0.2s ease-in-out; }
         .room-row:hover input::placeholder, .room-row input:focus::placeholder { color: #cbd5e1 !important; }
         
@@ -163,7 +165,7 @@
         };
 
         // ==========================================
-        // 1. 서브 컴포넌트 (렌더링 최적화 및 포커스 유지를 위해 App 외부로 완벽 분리)
+        // 1. 서브 컴포넌트 
         // ==========================================
         const AutoResizeTextarea = ({ value, onChange, placeholder, minRows = 4 }) => {
             const textareaRef = useRef(null);
@@ -340,6 +342,135 @@
                 const pageData = travelers.slice(i * TRAVELER_ROWS_PER_PAGE, (i + 1) * TRAVELER_ROWS_PER_PAGE);
                 travelerPages.push({ pageIndex: i, data: pageData });
             }
+
+            // ==========================================
+            // [추가된 기능] 명단 엑셀 양식 다운로드 및 데이터 파싱
+            // ==========================================
+            const downloadExcelTemplate = () => {
+                // 실무에서 바로 쓸 수 있는 샘플 데이터 삽입 (기타 항목은 공란으로 비움)
+                const ws_data = [
+                    ['순번', '성명', '영문명(NAME)', '생년월일', '성별(M/F)', '여권번호', '여권만료일', '국적', '기타'],
+                    [1, '홍길동', 'HONG GILDONG', '2009-01-01', 'M', 'M12345678', '2030-12-31', 'KOR', ''],
+                    [2, '김철수', 'KIM CHULSOO', '1980-05-20', 'M', 'M87654321', '2029-06-15', 'KOR', '']
+                ];
+                const ws = XLSX.utils.aoa_to_sheet(ws_data);
+
+                // 대표님 기획의도 반영: 투어메이커 표준 스타일 정의 (글꼴, 가운데 정렬, 색상, 테두리)
+                const headerStyle = {
+                    font: { name: '맑은 고딕', sz: 11, bold: true, color: { rgb: "FFFFFF" } },
+                    fill: { fgColor: { rgb: "1E3A8A" } }, // 투어메이커 딥 블루톤
+                    alignment: { horizontal: "center", vertical: "center" },
+                    border: {
+                        top: { style: "thin", color: { rgb: "000000" } },
+                        bottom: { style: "thin", color: { rgb: "000000" } },
+                        left: { style: "thin", color: { rgb: "000000" } },
+                        right: { style: "thin", color: { rgb: "000000" } }
+                    }
+                };
+
+                const dataStyleCenter = {
+                    font: { name: '맑은 고딕', sz: 10 },
+                    alignment: { horizontal: "center", vertical: "center" },
+                    border: {
+                        top: { style: "thin", color: { rgb: "CBD5E1" } },
+                        bottom: { style: "thin", color: { rgb: "CBD5E1" } },
+                        left: { style: "thin", color: { rgb: "CBD5E1" } },
+                        right: { style: "thin", color: { rgb: "CBD5E1" } }
+                    }
+                };
+
+                // 생성된 셀들에 디자인 스타일을 주입하는 루프
+                const range = XLSX.utils.decode_range(ws['!ref']);
+                for (let R = range.s.r; R <= range.e.r; ++R) {
+                    for (let C = range.s.c; C <= range.e.c; ++C) {
+                        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                        if (!ws[cellAddress]) continue;
+                        
+                        if (R === 0) {
+                            ws[cellAddress].s = headerStyle; // 1열(헤더)에 짙은 파란색 및 흰 글씨 적용
+                        } else {
+                            ws[cellAddress].s = dataStyleCenter; // 나머지 데이터는 전체 가운데 정렬
+                        }
+                    }
+                }
+
+                // 행 높이 최적화 (첫 줄 헤더는 눈에 잘 띄게 조금 더 넓게 설정)
+                ws['!rows'] = [{ hpt: 25 }, { hpt: 20 }, { hpt: 20 }];
+
+                // 웹 화면의 황금비율을 엑셀 셀 너비(wch)에 그대로 반영
+                ws['!cols'] = [
+                    { wch: 6 },  // 순번 (3%)
+                    { wch: 12 }, // 성명 (10%)
+                    { wch: 22 }, // 영문명 (22%)
+                    { wch: 14 }, // 생년월일 (12%)
+                    { wch: 10 }, // 성별 (5%)
+                    { wch: 16 }, // 여권번호 (14%)
+                    { wch: 14 }, // 여권만료일 (12%)
+                    { wch: 8 },  // 국적 (7%)
+                    { wch: 18 }  // 기타 (11%)
+                ];
+
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "여행자명단");
+                XLSX.writeFile(wb, "투어메이커_명단표준양식.xlsx");
+            };
+
+            const importExcelData = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = new Uint8Array(event.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const firstSheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[firstSheetName];
+                        
+                        // raw: false 옵션을 주어 엑셀에 보이는 텍스트(예: 2029-06-15) 그대로 파싱
+                        const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
+
+                        const newTravelers = [];
+                        // 첫 번째 줄(헤더)을 건너뛰고 2번째 줄부터 데이터 읽기
+                        for (let i = 1; i < json.length; i++) {
+                            const row = json[i];
+                            // 성명(index 1)이 비어있으면 유효한 데이터로 보지 않음
+                            if (!row || row.length === 0 || !row[1] || row[1].trim() === '') continue;
+
+                            // 성별 필터링 (남/여 또는 M/F 모두 유연하게 수용)
+                            let parsedGender = 'M';
+                            const rawGender = row[4] ? row[4].toString().toUpperCase().trim() : '';
+                            if (rawGender === 'F' || rawGender === '여') parsedGender = 'F';
+
+                            newTravelers.push({
+                                id: Date.now() + Math.random() + i,
+                                nameKor: row[1].toString().trim(),
+                                nameEng: row[2] ? row[2].toString().toUpperCase().trim() : koreanToEnglish(row[1].toString().trim()),
+                                birth: row[3] ? row[3].toString().trim() : "",
+                                gender: parsedGender,
+                                passportNo: row[5] ? row[5].toString().toUpperCase().trim() : "",
+                                expiry: row[6] ? row[6].toString().trim() : "",
+                                nation: row[7] ? row[7].toString().toUpperCase().trim() : "KOR",
+                                remark: row[8] ? row[8].toString().trim() : ""
+                            });
+                        }
+
+                        if (newTravelers.length > 0) {
+                            setTravelers(newTravelers);
+                            alert(`✅ 성공적으로 ${newTravelers.length}명의 명단 데이터를 웹으로 불러왔습니다.\n\n오타가 없는지 웹 화면에서 최종 확인해 주세요.`);
+                        } else {
+                            alert("⚠️ 엑셀 파일에 유효한 데이터(성명)가 없습니다. 양식을 다시 확인해주세요.");
+                        }
+                    } catch (error) {
+                        console.error("엑셀 파싱 에러:", error);
+                        alert("⚠️ 엑셀 파일을 읽는 중 오류가 발생했습니다. 올바른 포맷인지 확인해주세요.");
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+                // 중복 업로드를 위해 input 초기화
+                e.target.value = '';
+            };
+
 
             // ==========================================
             // [TAB 2] 방 배정 (루밍리스트)
@@ -598,24 +729,41 @@
                         {/* ========================================================================= */}
                         <div className={activeMainTab === 'traveler' ? 'block' : 'hidden'}>
                             
-                            {/* 안내 문구 (웹 전용) */}
+                            {/* 안내 문구 (웹 전용) 및 상단 컨트롤 */}
                             <div className="no-print max-w-[1400px] mx-auto mb-3 flex flex-col gap-2 px-3 md:px-4 bg-blue-50 py-3 rounded border border-blue-100">
                                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                                     <p className="text-[11px] md:text-sm text-blue-800 font-bold leading-relaxed">
                                         <i className="fas fa-lightbulb text-amber-500 mr-2"></i>
                                         셀을 마우스로 클릭해 직접 타이핑하세요. (좌측 ≡ 드래그로 행 순서 변경 가능)
                                     </p>
-                                    <div className="flex items-center gap-3 self-end sm:self-auto">
-                                        <div className="flex items-center gap-2 bg-white px-2 py-1 rounded shadow-sm border border-slate-200">
-                                            <span className="text-xs font-bold text-slate-500"><i className="fas fa-search-plus"></i> 글자 크기:</span>
+                                    
+                                    <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap justify-end">
+                                        
+                                        {/* [신규 기능] 엑셀 양식 다운 및 업로드 (글자크기 버튼 좌측 배치) */}
+                                        {!isSharedMode && (
+                                            <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded shadow-sm border border-emerald-300">
+                                                <button onClick={downloadExcelTemplate} className="text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1.5 transition whitespace-nowrap" title="표준 엑셀 양식 다운로드">
+                                                    <i className="fas fa-download"></i> 양식 다운
+                                                </button>
+                                                <div className="w-[1px] h-3 bg-emerald-300"></div>
+                                                <label htmlFor="excel-upload" className="cursor-pointer text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1.5 transition m-0 whitespace-nowrap" title="작성된 엑셀 파일 불러오기">
+                                                    <i className="fas fa-file-excel"></i> 명단 업로드
+                                                </label>
+                                                <input type="file" id="excel-upload" accept=".xlsx, .xls" className="hidden" onChange={importExcelData} />
+                                            </div>
+                                        )}
+
+                                        <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded shadow-sm border border-slate-200">
+                                            <span className="text-xs font-bold text-slate-500 whitespace-nowrap"><i className="fas fa-search-plus"></i> 글자 크기:</span>
                                             <button onClick={() => setDocFontSize(Math.max(8, docFontSize - 0.5))} className="w-5 h-5 flex justify-center items-center bg-slate-100 hover:bg-slate-200 rounded text-slate-600 font-bold">-</button>
                                             <span className="text-xs font-bold text-blue-600 w-10 text-center">{docFontSize}pt</span>
                                             <button onClick={() => setDocFontSize(Math.min(16, docFontSize + 0.5))} className="w-5 h-5 flex justify-center items-center bg-slate-100 hover:bg-slate-200 rounded text-slate-600 font-bold">+</button>
                                         </div>
+                                        
                                         {!isSharedMode && (
-                                            <button onClick={() => setTravelers([{ id: Date.now(), nameKor: "", nameEng: "", birth: "", gender: "M", passportNo: "", expiry: "", nation: "KOR", remark: "" }])} className="text-[10px] md:text-xs text-red-500 hover:text-red-700 font-bold underline"><i className="fas fa-trash-alt"></i> 전체 초기화</button>
+                                            <button onClick={() => setTravelers([{ id: Date.now(), nameKor: "", nameEng: "", birth: "", gender: "M", passportNo: "", expiry: "", nation: "KOR", remark: "" }])} className="text-[10px] md:text-xs text-red-500 hover:text-red-700 font-bold underline whitespace-nowrap ml-1"><i className="fas fa-trash-alt"></i> 전체 초기화</button>
                                         )}
-                                        <span className="text-[11px] md:text-sm font-black text-slate-700 whitespace-nowrap">실 인원 <span className="text-blue-600 text-base md:text-lg">{travelers.length}</span> 명</span>
+                                        <span className="text-[11px] md:text-sm font-black text-slate-700 whitespace-nowrap ml-2">실 인원 <span className="text-blue-600 text-base md:text-lg">{travelers.length}</span> 명</span>
                                     </div>
                                 </div>
                                 <p className="text-[10px] md:text-[12px] font-bold text-red-600 leading-relaxed"><i className="fas fa-exclamation-circle mr-1"></i> 한글 이름을 입력하면 영문명이 자동으로 변환됩니다. 실제 여권과 대조하여 반드시 재확인 바랍니다.</p>
@@ -835,7 +983,7 @@
 
                                 <div className="space-y-6 print:space-y-0">
                                     {roomPages.map((pageRooms, pageIndex) => {
-                                        // [핵심 해결] 양쪽 방을 하나의 줄(Row) 단위로 처리하기 위해 쌍으로 묶음
+                                        // 양쪽 방을 하나의 줄(Row) 단위로 처리하기 위해 쌍으로 묶음
                                         const leftTableRooms = pageRooms.slice(0, Math.ceil(pageRooms.length / 2));
                                         const rightTableRooms = pageRooms.slice(Math.ceil(pageRooms.length / 2));
                                         const pageStartIndex = pageIndex * ROOMS_PER_PAGE;
@@ -898,7 +1046,7 @@
                                                                 </div>
                                                             </div>
 
-                                                            {/* [핵심 해결] 표 몸통 (Row 단위 통짜 렌더링) */}
+                                                            {/* 표 몸통 (Row 단위 통짜 렌더링) */}
                                                             <div className="flex flex-col w-full">
                                                                 {Array.from({ length: leftTableRooms.length }).map((_, i) => {
                                                                     const leftRoom = leftTableRooms[i];
