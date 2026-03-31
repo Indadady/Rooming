@@ -88,6 +88,7 @@
             /* --- 방배정 인쇄용 --- */
             .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; display: flex !important; flex-direction: column !important; }
             .room-table-container, .room-row { break-inside: avoid; }
+            /* [개선] 인쇄 시 불필요한 내부 border-bottom 충돌 완전 제거 */
             .room-row { padding: 0 !important; }
             
             input, select, textarea { border: none !important; background: transparent !important; appearance: none; -webkit-appearance: none; }
@@ -207,7 +208,7 @@
 
         const RoomRow = ({ room, actualIdx, globalIdx, updateRoom, updateGuest, changeRoomType, removeRoom, dragRoomStart, dragRoomEnter, dragRoomEnd, dropRoom, fontSize, isInternationalRooming }) => (
             <div
-                className="room-row room-grid group relative bg-white items-stretch h-full"
+                className="room-row room-grid group relative bg-white w-full h-full"
                 style={{ breakInside: 'avoid' }}
                 draggable
                 onDragStart={(e) => dragRoomStart(e, globalIdx)}
@@ -230,9 +231,9 @@
                     </select>
                 </div>
 
-                <div className="flex flex-col py-0.5 bg-white min-w-0 border-r border-slate-200">
+                <div className="flex flex-col py-0.5 bg-white min-w-0 border-r border-slate-200 justify-center">
                     {room.guests.map((g, gIdx) => (
-                        <div key={gIdx} className={`flex flex-col px-1.5 md:px-2 py-1 ${gIdx > 0 ? 'border-t border-dashed border-slate-200' : ''}`} style={{ padding: `${fontSize/2.5}px 4px` }}>
+                        <div key={gIdx} className={`flex flex-col px-1.5 md:px-2 py-1 ${gIdx > 0 ? 'border-t border-dashed border-slate-300' : ''}`} style={{ padding: `${fontSize/2.5}px 4px` }}>
                             <div className="flex items-center gap-1 md:gap-2 w-full">
                                 <input className="font-bold outline-none bg-transparent focus:text-blue-600" style={{ fontSize: `${fontSize}pt`, width: `${fontSize * 4.5}px` }} value={g.name} placeholder="이름" onChange={(e) => updateGuest(globalIdx, gIdx, 'name', e.target.value)} />
                                 <button type="button" onClick={() => updateGuest(globalIdx, gIdx, 'gender', g.gender === '남' ? '여' : '남')} className={`flex-shrink-0 font-bold px-1.5 py-0.5 rounded cursor-pointer ${g.gender === '여' ? 'bg-pink-50 text-pink-600' : 'bg-blue-50 text-blue-600'}`} style={{ fontSize: `${Math.max(8, fontSize - 2)}pt` }}>
@@ -642,6 +643,7 @@
                                         </div>
 
                                         <div className="table-wrapper w-full relative flex-1">
+                                            {/* 표 아래선 굵게 마감하여 데이터 끝났음을 명확히 표시 */}
                                             <table className="w-full border-collapse min-w-[900px] border-b-[3px] border-slate-800" style={{ fontSize: `${docFontSize}pt`, tableLayout: 'fixed' }}>
                                                 <colgroup>
                                                     <col className="no-print w-[3%]" />
@@ -833,7 +835,7 @@
 
                                 <div className="space-y-6 print:space-y-0">
                                     {roomPages.map((pageRooms, pageIndex) => {
-                                        // [핵심] 두 개의 단락을 좌우로 나누던 방식을 버리고, 하나의 열에 두 개의 방을 함께 매핑하여 가로줄로 렌더링
+                                        // [핵심 해결] 양쪽 방을 하나의 줄(Row) 단위로 처리하기 위해 쌍으로 묶음
                                         const leftTableRooms = pageRooms.slice(0, Math.ceil(pageRooms.length / 2));
                                         const rightTableRooms = pageRooms.slice(Math.ceil(pageRooms.length / 2));
                                         const pageStartIndex = pageIndex * ROOMS_PER_PAGE;
@@ -876,16 +878,18 @@
                                                     <div className="table-wrapper flex-1 w-full relative">
                                                         <div className="w-full border-t-[2px] border-slate-800 border-b-[3px] flex flex-col bg-white">
                                                             
-                                                            {/* [개선] 표 헤더: 몸통과 완벽히 동일한 그리드 구조를 써서 가운데 어긋남(단차) 원천 차단 */}
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 print:grid-cols-2 w-full border-b-[2px] border-slate-800 text-slate-800 font-bold bg-slate-50" style={{ fontSize: `${Math.max(8, docFontSize - 1)}pt` }}>
-                                                                <div className="room-grid text-center items-stretch md:border-r-[2px] print:border-r-[2px] border-slate-800">
+                                                            {/* 표 헤더 */}
+                                                            <div className="flex flex-col md:flex-row print:flex-row items-stretch w-full border-b-[2px] border-slate-800 text-slate-800 font-bold bg-slate-50" style={{ fontSize: `${Math.max(8, docFontSize - 1)}pt` }}>
+                                                                {/* 헤더 좌측 (우측에 굵은 선 마감) */}
+                                                                <div className="room-grid text-center items-stretch w-full md:w-1/2 print:w-1/2 md:border-r-[2px] print:border-r-[2px] border-slate-800">
                                                                     <div className="no-print flex items-center justify-center py-2 border-r border-slate-200"><i className="fas fa-sort text-slate-300"></i></div>
                                                                     <div className="flex items-center justify-center py-2 border-r border-slate-200">NO</div>
                                                                     <div className="flex items-center justify-center py-2 border-r border-slate-200">TYPE</div>
                                                                     <div className="flex items-center justify-start pl-2 py-2 border-r border-slate-200">GUEST INFO</div>
                                                                     <div className="flex items-center justify-center py-2">ROOM NO</div>
                                                                 </div>
-                                                                <div className="room-grid text-center items-stretch hidden md:grid print:grid">
+                                                                {/* 헤더 우측 */}
+                                                                <div className="room-grid text-center items-stretch w-full md:w-1/2 print:w-1/2 hidden md:grid print:grid">
                                                                     <div className="no-print flex items-center justify-center py-2 border-r border-slate-200"><i className="fas fa-sort text-slate-300"></i></div>
                                                                     <div className="flex items-center justify-center py-2 border-r border-slate-200">NO</div>
                                                                     <div className="flex items-center justify-center py-2 border-r border-slate-200">TYPE</div>
@@ -894,7 +898,7 @@
                                                                 </div>
                                                             </div>
 
-                                                            {/* [개선] 표 바디: 양 갈래로 나뉘던 구조를 버리고 '한 줄(Row)' 단위로 합쳐서 통일성 확보 */}
+                                                            {/* [핵심 해결] 표 몸통 (Row 단위 통짜 렌더링) */}
                                                             <div className="flex flex-col w-full">
                                                                 {Array.from({ length: leftTableRooms.length }).map((_, i) => {
                                                                     const leftRoom = leftTableRooms[i];
@@ -903,15 +907,23 @@
                                                                     const rightGlobalIdx = rightRoom ? rooms.findIndex(r => r.id === rightRoom.id) : -1;
 
                                                                     return (
-                                                                        <div key={i} className={`grid grid-cols-1 md:grid-cols-2 print:grid-cols-2 w-full ${i < leftTableRooms.length - 1 ? 'border-b border-slate-300' : ''}`}>
-                                                                            {/* 중앙선을 담당하는 좌측 방 */}
-                                                                            <div className={`w-full md:border-r-[2px] print:border-r-[2px] border-slate-800 ${rightRoom ? 'border-b border-slate-300 md:border-b-0 print:border-b-0' : ''}`}>
+                                                                        /* 가로선을 그어 완벽한 십자(+) 모양 구현 */
+                                                                        <div key={i} className="flex flex-col md:flex-row print:flex-row w-full items-stretch border-b border-slate-300 last:border-b-0 bg-white">
+                                                                            
+                                                                            {/* 좌측 방 (우측 굵은선 마감) */}
+                                                                            <div className="w-full md:w-1/2 print:w-1/2 md:border-r-[2px] print:border-r-[2px] border-slate-800 flex">
                                                                                 <RoomRow room={leftRoom} actualIdx={pageStartIndex + i} globalIdx={leftGlobalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} />
                                                                             </div>
+                                                                            
                                                                             {/* 우측 방 */}
-                                                                            <div className="w-full h-full bg-white">
-                                                                                {rightRoom && <RoomRow room={rightRoom} actualIdx={pageStartIndex + leftTableRooms.length + i} globalIdx={rightGlobalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} />}
+                                                                            <div className="w-full md:w-1/2 print:w-1/2 flex">
+                                                                                {rightRoom ? (
+                                                                                    <RoomRow room={rightRoom} actualIdx={pageStartIndex + leftTableRooms.length + i} globalIdx={rightGlobalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} />
+                                                                                ) : (
+                                                                                    <div className="w-full h-full bg-white"></div>
+                                                                                )}
                                                                             </div>
+                                                                            
                                                                         </div>
                                                                     );
                                                                 })}
