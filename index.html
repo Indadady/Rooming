@@ -26,7 +26,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script>window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';</script>
 
-    <!-- SheetJS (엑셀 파일 생성 및 업로드 파싱용 - 스타일 완벽 지원 엔진으로 교체) -->
+    <!-- SheetJS -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 
     <!-- Google Analytics (GA4) -->
@@ -302,12 +302,26 @@
 
             const getExpiryStatus = (dateStr) => {
                 if (!dateStr) return { color: "text-slate-400", warning: false };
-                const match = dateStr.match(/(\d{4})[-./년]?\s*(\d{1,2})[-./월]?\s*(\d{1,2})/);
+                // 정규식 개선: 2자리 년도(예: 30-10-22) 또는 4자리 년도를 모두 허용하도록 유연성 확보
+                const match = dateStr.match(/(\d{2,4})[-./년]?\s*(\d{1,2})[-./월]?\s*(\d{1,2})/);
                 if (!match) return { color: "text-slate-600", warning: false };
-                const expDate = new Date(match[1], match[2] - 1, match[3]);
+                
+                let year = parseInt(match[1], 10);
+                // 연도가 2자리로 파싱되었을 경우 2000년대로 치환 (예: 31 -> 2031)
+                if (year < 100) {
+                    year += 2000;
+                }
+                const month = parseInt(match[2], 10);
+                const day = parseInt(match[3], 10);
+
+                const expDate = new Date(year, month - 1, day);
                 const today = new Date();
+                today.setHours(0,0,0,0);
+                
                 const sixMonthsLater = new Date();
                 sixMonthsLater.setMonth(today.getMonth() + 6);
+                sixMonthsLater.setHours(0,0,0,0);
+
                 if (expDate < today) return { color: "text-red-600 font-bold bg-red-50", warning: true, msg: "만료됨" };
                 if (expDate < sixMonthsLater) return { color: "text-orange-500 font-bold", warning: true, msg: "6개월 미만" };
                 return { color: "text-slate-700", warning: false };
@@ -344,10 +358,9 @@
             }
 
             // ==========================================
-            // [추가된 기능] 명단 엑셀 양식 다운로드 및 데이터 파싱
+            // [강화된 기능] 명단 엑셀 양식 다운로드 및 데이터 파싱
             // ==========================================
             const downloadExcelTemplate = () => {
-                // 실무에서 바로 쓸 수 있는 샘플 데이터 삽입 (기타 항목은 공란으로 비움)
                 const ws_data = [
                     ['순번', '성명', '영문명(NAME)', '생년월일', '성별(M/F)', '여권번호', '여권만료일', '국적', '기타'],
                     [1, '홍길동', 'HONG GILDONG', '2009-01-01', 'M', 'M12345678', '2030-12-31', 'KOR', ''],
@@ -355,10 +368,9 @@
                 ];
                 const ws = XLSX.utils.aoa_to_sheet(ws_data);
 
-                // 대표님 기획의도 반영: 투어메이커 표준 스타일 정의 (글꼴, 가운데 정렬, 색상, 테두리)
                 const headerStyle = {
                     font: { name: '맑은 고딕', sz: 11, bold: true, color: { rgb: "FFFFFF" } },
-                    fill: { fgColor: { rgb: "1E3A8A" } }, // 투어메이커 딥 블루톤
+                    fill: { fgColor: { rgb: "1E3A8A" } },
                     alignment: { horizontal: "center", vertical: "center" },
                     border: {
                         top: { style: "thin", color: { rgb: "000000" } },
@@ -379,7 +391,6 @@
                     }
                 };
 
-                // 생성된 셀들에 디자인 스타일을 주입하는 루프
                 const range = XLSX.utils.decode_range(ws['!ref']);
                 for (let R = range.s.r; R <= range.e.r; ++R) {
                     for (let C = range.s.c; C <= range.e.c; ++C) {
@@ -387,27 +398,17 @@
                         if (!ws[cellAddress]) continue;
                         
                         if (R === 0) {
-                            ws[cellAddress].s = headerStyle; // 1열(헤더)에 짙은 파란색 및 흰 글씨 적용
+                            ws[cellAddress].s = headerStyle;
                         } else {
-                            ws[cellAddress].s = dataStyleCenter; // 나머지 데이터는 전체 가운데 정렬
+                            ws[cellAddress].s = dataStyleCenter;
                         }
                     }
                 }
 
-                // 행 높이 최적화 (첫 줄 헤더는 눈에 잘 띄게 조금 더 넓게 설정)
                 ws['!rows'] = [{ hpt: 25 }, { hpt: 20 }, { hpt: 20 }];
-
-                // 웹 화면의 황금비율을 엑셀 셀 너비(wch)에 그대로 반영
                 ws['!cols'] = [
-                    { wch: 6 },  // 순번 (3%)
-                    { wch: 12 }, // 성명 (10%)
-                    { wch: 22 }, // 영문명 (22%)
-                    { wch: 14 }, // 생년월일 (12%)
-                    { wch: 10 }, // 성별 (5%)
-                    { wch: 16 }, // 여권번호 (14%)
-                    { wch: 14 }, // 여권만료일 (12%)
-                    { wch: 8 },  // 국적 (7%)
-                    { wch: 18 }  // 기타 (11%)
+                    { wch: 6 },  { wch: 12 }, { wch: 22 }, { wch: 14 },
+                    { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 8 }, { wch: 18 } 
                 ];
 
                 const wb = XLSX.utils.book_new();
@@ -423,35 +424,51 @@
                 reader.onload = (event) => {
                     try {
                         const data = new Uint8Array(event.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
+                        
+                        // [핵심 변경사항] cellDates: true를 주어 엑셀에 셀 서식(날짜형식)으로 입력된 경우 강제로 Date 객체로 추출
+                        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                         const firstSheetName = workbook.SheetNames[0];
                         const worksheet = workbook.Sheets[firstSheetName];
                         
-                        // raw: false 옵션을 주어 엑셀에 보이는 텍스트(예: 2029-06-15) 그대로 파싱
-                        const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
+                        // raw: true를 통해 임의 변환을 막고 원본 데이터를 그대로 배열화
+                        const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
+
+                        // 날짜 데이터를 문자열 형태로 안전하게 변환해주는 헬퍼 함수
+                        const parseExcelDate = (cellVal) => {
+                            if (!cellVal) return "";
+                            // 엑셀에서 날짜 서식으로 지정되어 Date 객체로 파싱된 경우
+                            if (cellVal instanceof Date) {
+                                const year = cellVal.getFullYear();
+                                const month = String(cellVal.getMonth() + 1).padStart(2, '0');
+                                const day = String(cellVal.getDate()).padStart(2, '0');
+                                return `${year}-${month}-${day}`;
+                            }
+                            
+                            // 엑셀에서 순수 텍스트로 적었을 경우 ("2009.05.13" 형태를 "2009-05-13"로 치환)
+                            let strVal = String(cellVal).trim();
+                            strVal = strVal.replace(/\./g, '-').replace(/\//g, '-');
+                            return strVal;
+                        };
 
                         const newTravelers = [];
-                        // 첫 번째 줄(헤더)을 건너뛰고 2번째 줄부터 데이터 읽기
                         for (let i = 1; i < json.length; i++) {
                             const row = json[i];
-                            // 성명(index 1)이 비어있으면 유효한 데이터로 보지 않음
-                            if (!row || row.length === 0 || !row[1] || row[1].trim() === '') continue;
+                            if (!row || row.length === 0 || !row[1] || String(row[1]).trim() === '') continue;
 
-                            // 성별 필터링 (남/여 또는 M/F 모두 유연하게 수용)
                             let parsedGender = 'M';
-                            const rawGender = row[4] ? row[4].toString().toUpperCase().trim() : '';
+                            const rawGender = row[4] ? String(row[4]).toUpperCase().trim() : '';
                             if (rawGender === 'F' || rawGender === '여') parsedGender = 'F';
 
                             newTravelers.push({
                                 id: Date.now() + Math.random() + i,
-                                nameKor: row[1].toString().trim(),
-                                nameEng: row[2] ? row[2].toString().toUpperCase().trim() : koreanToEnglish(row[1].toString().trim()),
-                                birth: row[3] ? row[3].toString().trim() : "",
+                                nameKor: String(row[1]).trim(),
+                                nameEng: row[2] ? String(row[2]).toUpperCase().trim() : koreanToEnglish(String(row[1]).trim()),
+                                birth: parseExcelDate(row[3]),
                                 gender: parsedGender,
-                                passportNo: row[5] ? row[5].toString().toUpperCase().trim() : "",
-                                expiry: row[6] ? row[6].toString().trim() : "",
-                                nation: row[7] ? row[7].toString().toUpperCase().trim() : "KOR",
-                                remark: row[8] ? row[8].toString().trim() : ""
+                                passportNo: row[5] ? String(row[5]).toUpperCase().trim() : "",
+                                expiry: parseExcelDate(row[6]),
+                                nation: row[7] ? String(row[7]).toUpperCase().trim() : "KOR",
+                                remark: row[8] ? String(row[8]).trim() : ""
                             });
                         }
 
@@ -467,7 +484,6 @@
                     }
                 };
                 reader.readAsArrayBuffer(file);
-                // 중복 업로드를 위해 input 초기화
                 e.target.value = '';
             };
 
@@ -739,7 +755,7 @@
                                     
                                     <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap justify-end">
                                         
-                                        {/* [신규 기능] 엑셀 양식 다운 및 업로드 (글자크기 버튼 좌측 배치) */}
+                                        {/* [강화된 기능] 엑셀 양식 다운 및 업로드 */}
                                         {!isSharedMode && (
                                             <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded shadow-sm border border-emerald-300">
                                                 <button onClick={downloadExcelTemplate} className="text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1.5 transition whitespace-nowrap" title="표준 엑셀 양식 다운로드">
@@ -903,7 +919,7 @@
                         </div>
 
                         {/* ========================================================================= */}
-                        {/* TAB 2: 방 배정 (루밍리스트) - 가로행(Row) 기준의 완벽한 표 구조로 개편 */}
+                        {/* TAB 2: 방 배정 (루밍리스트) */}
                         {/* ========================================================================= */}
                         <div className={activeMainTab === 'rooming' ? 'block' : 'hidden'}>
                             <div className="w-full max-w-full xl:max-w-[1400px] mx-auto p-0 sm:p-4 md:p-6 print-rooming-list">
