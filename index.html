@@ -447,11 +447,11 @@
                         const parseExcelDate = (cellVal) => {
                             if (!cellVal) return "";
                             
-                            // 1. 엑셀 날짜 객체인 경우 (국가별 Timezone Shift 방지를 위해 UTC 기준 추출)
+                            // 1. 엑셀 날짜 객체인 경우 (하루 밀림 현상 완벽 해결: UTC 대신 브라우저 로컬 시간으로 직접 추출)
                             if (cellVal instanceof Date) {
-                                const year = cellVal.getUTCFullYear();
-                                const month = String(cellVal.getUTCMonth() + 1).padStart(2, '0');
-                                const day = String(cellVal.getUTCDate()).padStart(2, '0');
+                                const year = cellVal.getFullYear();
+                                const month = String(cellVal.getMonth() + 1).padStart(2, '0');
+                                const day = String(cellVal.getDate()).padStart(2, '0');
                                 return `${year}-${month}-${day}`;
                             }
                             
