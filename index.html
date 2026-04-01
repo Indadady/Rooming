@@ -302,8 +302,18 @@
 
             const getExpiryStatus = (dateStr) => {
                 if (!dateStr) return { color: "text-slate-400", warning: false };
+                
+                // [추가] 사용자가 웹에서 6자리 숫자(예: 311022)만 쳐도 인식하게 방어
+                let normalizedStr = dateStr;
+                if (normalizedStr.replace(/\s/g, '').match(/^\d{6}$/)) {
+                    let clean = normalizedStr.replace(/\s/g, '');
+                    let y = parseInt(clean.substring(0, 2), 10);
+                    y += (y > 50 ? 1900 : 2000); // 50 기준으로 1900/2000년대 자동 판별
+                    normalizedStr = `${y}-${clean.substring(2, 4)}-${clean.substring(4, 6)}`;
+                }
+
                 // 정규식 개선: 2자리 년도(예: 30-10-22) 또는 4자리 년도를 모두 허용하도록 유연성 확보
-                const match = dateStr.match(/(\d{2,4})[-./년]?\s*(\d{1,2})[-./월]?\s*(\d{1,2})/);
+                const match = normalizedStr.match(/(\d{2,4})[-./년]?\s*(\d{1,2})[-./월]?\s*(\d{1,2})/);
                 if (!match) return { color: "text-slate-600", warning: false };
                 
                 let year = parseInt(match[1], 10);
@@ -436,16 +446,37 @@
                         // 날짜 데이터를 문자열 형태로 안전하게 변환해주는 헬퍼 함수
                         const parseExcelDate = (cellVal) => {
                             if (!cellVal) return "";
-                            // 엑셀에서 날짜 서식으로 지정되어 Date 객체로 파싱된 경우
+                            
+                            // 1. 엑셀 날짜 객체인 경우 (국가별 Timezone Shift 방지를 위해 UTC 기준 추출)
                             if (cellVal instanceof Date) {
-                                const year = cellVal.getFullYear();
-                                const month = String(cellVal.getMonth() + 1).padStart(2, '0');
-                                const day = String(cellVal.getDate()).padStart(2, '0');
+                                const year = cellVal.getUTCFullYear();
+                                const month = String(cellVal.getUTCMonth() + 1).padStart(2, '0');
+                                const day = String(cellVal.getUTCDate()).padStart(2, '0');
                                 return `${year}-${month}-${day}`;
                             }
                             
-                            // 엑셀에서 순수 텍스트로 적었을 경우 ("2009.05.13" 형태를 "2009-05-13"로 치환)
                             let strVal = String(cellVal).trim();
+                            
+                            // 2. PDF에서 보였던 "11/14/09" (월/일/년도) 같은 미국식 텍스트 형태 처리
+                            const usDateMatch = strVal.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+                            if (usDateMatch) {
+                                let m = String(usDateMatch[1]).padStart(2, '0');
+                                let d = String(usDateMatch[2]).padStart(2, '0');
+                                let y = parseInt(usDateMatch[3], 10);
+                                if (y < 100) y += (y > 50 ? 1900 : 2000); // 2자리 연도 보정
+                                return `${y}-${m}-${d}`;
+                            }
+
+                            // 3. "091114" 같은 6자리 연속 숫자 텍스트 처리 (주민번호 앞자리 등)
+                            if (strVal.match(/^\d{6}$/)) {
+                                let y = parseInt(strVal.substring(0, 2), 10);
+                                y += (y > 50 ? 1900 : 2000);
+                                const m = strVal.substring(2, 4);
+                                const d = strVal.substring(4, 6);
+                                return `${y}-${m}-${d}`;
+                            }
+
+                            // 4. 일반적인 "YYYY.MM.DD" 또는 "YYYY/MM/DD" 처리
                             strVal = strVal.replace(/\./g, '-').replace(/\//g, '-');
                             return strVal;
                         };
