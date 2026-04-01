@@ -549,6 +549,86 @@
                 e.target.value = '';
             };
 
+            // [신규 기능] 웹에서 완성된 명단을 랜드사/항공사 제출용 엑셀로 내보내기
+            const exportTravelersToExcel = () => {
+                const ws_data = [
+                    ['순번', '성명', '영문명(NAME)', '생년월일', '성별(M/F)', '여권번호', '여권만료일', '국적', '기타']
+                ];
+                
+                let count = 1;
+                travelers.forEach((t) => {
+                    // 이름이 비어있는 빈 행은 제외하고 실제 데이터만 추출
+                    if(t.nameKor.trim() === "") return; 
+                    ws_data.push([
+                        count++,
+                        t.nameKor,
+                        t.nameEng,
+                        t.birth,
+                        t.gender,
+                        t.passportNo,
+                        t.expiry,
+                        t.nation,
+                        t.remark
+                    ]);
+                });
+
+                if (ws_data.length === 1) {
+                    alert("⚠️ 내보낼 여행자 데이터가 없습니다. 명단을 먼저 작성해주세요.");
+                    return;
+                }
+
+                const ws = XLSX.utils.aoa_to_sheet(ws_data);
+
+                // 투어메이커 표준 디자인 스타일 적용
+                const headerStyle = {
+                    font: { name: '맑은 고딕', sz: 11, bold: true, color: { rgb: "FFFFFF" } },
+                    fill: { fgColor: { rgb: "1E3A8A" } },
+                    alignment: { horizontal: "center", vertical: "center" },
+                    border: {
+                        top: { style: "thin", color: { rgb: "000000" } },
+                        bottom: { style: "thin", color: { rgb: "000000" } },
+                        left: { style: "thin", color: { rgb: "000000" } },
+                        right: { style: "thin", color: { rgb: "000000" } }
+                    }
+                };
+
+                const dataStyleCenter = {
+                    font: { name: '맑은 고딕', sz: 10 },
+                    alignment: { horizontal: "center", vertical: "center" },
+                    border: {
+                        top: { style: "thin", color: { rgb: "CBD5E1" } },
+                        bottom: { style: "thin", color: { rgb: "CBD5E1" } },
+                        left: { style: "thin", color: { rgb: "CBD5E1" } },
+                        right: { style: "thin", color: { rgb: "CBD5E1" } }
+                    }
+                };
+
+                const range = XLSX.utils.decode_range(ws['!ref']);
+                for (let R = range.s.r; R <= range.e.r; ++R) {
+                    for (let C = range.s.c; C <= range.e.c; ++C) {
+                        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                        if (!ws[cellAddress]) continue;
+                        if (R === 0) ws[cellAddress].s = headerStyle;
+                        else ws[cellAddress].s = dataStyleCenter;
+                    }
+                }
+
+                ws['!rows'] = Array(ws_data.length).fill({ hpt: 20 });
+                ws['!rows'][0] = { hpt: 25 }; // 헤더 높이
+
+                ws['!cols'] = [
+                    { wch: 6 }, { wch: 12 }, { wch: 22 }, { wch: 14 },
+                    { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 8 }, { wch: 18 } 
+                ];
+
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "여행자명단_최종");
+                
+                // 단체명이 있으면 파일명에 반영, 없으면 날짜로 파일명 자동 생성
+                const fileName = commonHeader.groupName ? `${commonHeader.groupName.replace(/\//g, '_')}_여행자명단.xlsx` : `투어메이커_여행자명단_${new Date().toISOString().slice(0,10).replace(/-/g, '')}.xlsx`;
+                XLSX.writeFile(wb, fileName);
+            };
+
 
             // ==========================================
             // [TAB 2] 방 배정 (루밍리스트)
@@ -817,17 +897,21 @@
                                     
                                     <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap justify-end">
                                         
-                                        {/* [강화된 기능] 엑셀 양식 다운 및 업로드 */}
+                                        {/* [강화된 기능] 엑셀 양식 다운, 업로드 및 최종 내보내기 */}
                                         {!isSharedMode && (
-                                            <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded shadow-sm border border-emerald-300">
-                                                <button onClick={downloadExcelTemplate} className="text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1.5 transition whitespace-nowrap" title="표준 엑셀 양식 다운로드">
+                                            <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded shadow-sm border border-emerald-400">
+                                                <button onClick={downloadExcelTemplate} className="text-[11px] md:text-xs font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 transition whitespace-nowrap" title="빈 엑셀 양식 다운로드">
                                                     <i className="fas fa-download"></i> 양식 다운
                                                 </button>
                                                 <div className="w-[1px] h-3 bg-emerald-300"></div>
-                                                <label htmlFor="excel-upload" className="cursor-pointer text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1.5 transition m-0 whitespace-nowrap" title="작성된 엑셀 파일 불러오기">
-                                                    <i className="fas fa-file-excel"></i> 명단 업로드
+                                                <label htmlFor="excel-upload" className="cursor-pointer text-[11px] md:text-xs font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 transition m-0 whitespace-nowrap" title="작성된 엑셀 파일 불러오기">
+                                                    <i className="fas fa-upload"></i> 명단 업로드
                                                 </label>
                                                 <input type="file" id="excel-upload" accept=".xlsx, .xls" className="hidden" onChange={importExcelData} />
+                                                <div className="w-[1px] h-3 bg-emerald-300"></div>
+                                                <button onClick={exportTravelersToExcel} className="text-[11px] md:text-xs font-black text-emerald-700 hover:text-emerald-900 flex items-center gap-1 transition whitespace-nowrap" title="웹에서 완성한 명단을 엑셀 파일로 저장">
+                                                    <i className="fas fa-file-excel"></i> 완성본 엑셀저장
+                                                </button>
                                             </div>
                                         )}
 
