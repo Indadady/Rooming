@@ -435,8 +435,8 @@
                     try {
                         const data = new Uint8Array(event.target.result);
                         
-                        // [핵심 변경사항] cellDates: true를 주어 엑셀에 셀 서식(날짜형식)으로 입력된 경우 강제로 Date 객체로 추출
-                        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                        // [핵심 변경사항] cellDates: true 옵션 제거. (브라우저 시차 개입 원천 차단)
+                        const workbook = XLSX.read(data, { type: 'array' });
                         const firstSheetName = workbook.SheetNames[0];
                         const worksheet = workbook.Sheets[firstSheetName];
                         
@@ -445,19 +445,50 @@
 
                         // 날짜 데이터를 문자열 형태로 안전하게 변환해주는 헬퍼 함수
                         const parseExcelDate = (cellVal) => {
-                            if (!cellVal) return "";
+                            if (cellVal === undefined || cellVal === null || cellVal === "") return "";
                             
-                            // 1. 엑셀 날짜 객체인 경우 (하루 밀림 현상 완벽 해결: UTC 대신 브라우저 로컬 시간으로 직접 추출)
-                            if (cellVal instanceof Date) {
-                                const year = cellVal.getFullYear();
-                                const month = String(cellVal.getMonth() + 1).padStart(2, '0');
-                                const day = String(cellVal.getDate()).padStart(2, '0');
-                                return `${year}-${month}-${day}`;
+                            // 1. 엑셀에서 날짜(고유 일련번호) 또는 숫자로 읽힌 경우 (시차 버그의 주범 완벽 해결)
+                            if (typeof cellVal === 'number') {
+                                // 1-1. 6자리 숫자(예: 091116인데 엑셀이 맨 앞 0을 지우고 91116으로 인식한 경우)
+                                const numStr = String(cellVal);
+                                if (numStr.length === 6 || (numStr.length === 5 && cellVal >= 10000 && cellVal <= 99999)) {
+                                    let padded = numStr.padStart(6, '0');
+                                    let y = parseInt(padded.substring(0, 2), 10);
+                                    y += (y > 50 ? 1900 : 2000);
+                                    const m = padded.substring(2, 4);
+                                    const d = padded.substring(4, 6);
+                                    if (parseInt(m) >= 1 && parseInt(m) <= 12 && parseInt(d) >= 1 && parseInt(d) <= 31) {
+                                        return `${y}-${m}-${d}`;
+                                    }
+                                }
+                                
+                                // 1-2. 엑셀 날짜 일련번호 (수학적 계산으로 브라우저 시차 완전 무시)
+                                // 엑셀 기준 1970년 1월 1일은 일련번호 25569입니다. 이를 기준으로 절대 날짜를 역산합니다.
+                                if (cellVal > 10000 && cellVal < 60000) {
+                                    const utc_days = Math.floor(cellVal - 25569);
+                                    const utc_value = utc_days * 86400 * 1000;                                        
+                                    const date_info = new Date(utc_value);
+                                    const y = date_info.getUTCFullYear();
+                                    const m = String(date_info.getUTCMonth() + 1).padStart(2, '0');
+                                    const d = String(date_info.getUTCDate()).padStart(2, '0');
+                                    return `${y}-${m}-${d}`;
+                                }
+                                return numStr;
                             }
                             
                             let strVal = String(cellVal).trim();
                             
-                            // 2. PDF에서 보였던 "11/14/09" (월/일/년도) 같은 미국식 텍스트 형태 처리
+                            // 2. 6자리 문자열 텍스트 (예: "091116")
+                            if (strVal.replace(/\s/g, '').match(/^\d{6}$/)) {
+                                let clean = strVal.replace(/\s/g, '');
+                                let y = parseInt(clean.substring(0, 2), 10);
+                                y += (y > 50 ? 1900 : 2000);
+                                const m = clean.substring(2, 4);
+                                const d = clean.substring(4, 6);
+                                return `${y}-${m}-${d}`;
+                            }
+
+                            // 3. 미국식 텍스트 형태 (예: "11/14/09")
                             const usDateMatch = strVal.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
                             if (usDateMatch) {
                                 let m = String(usDateMatch[1]).padStart(2, '0');
@@ -467,17 +498,17 @@
                                 return `${y}-${m}-${d}`;
                             }
 
-                            // 3. "091114" 같은 6자리 연속 숫자 텍스트 처리 (주민번호 앞자리 등)
-                            if (strVal.match(/^\d{6}$/)) {
-                                let y = parseInt(strVal.substring(0, 2), 10);
-                                y += (y > 50 ? 1900 : 2000);
-                                const m = strVal.substring(2, 4);
-                                const d = strVal.substring(4, 6);
+                            // 4. 일반적인 형태 ("YYYY.MM.DD" 등 모두 하이픈으로 통일)
+                            strVal = strVal.replace(/\./g, '-').replace(/\//g, '-').replace(/,/g, '-').replace(/\s/g, '');
+                            const standardMatch = strVal.match(/^(\d{2,4})-(\d{1,2})-(\d{1,2})$/);
+                            if (standardMatch) {
+                                let y = parseInt(standardMatch[1], 10);
+                                if (y < 100) y += (y > 50 ? 1900 : 2000);
+                                let m = String(standardMatch[2]).padStart(2, '0');
+                                let d = String(standardMatch[3]).padStart(2, '0');
                                 return `${y}-${m}-${d}`;
                             }
 
-                            // 4. 일반적인 "YYYY.MM.DD" 또는 "YYYY/MM/DD" 처리
-                            strVal = strVal.replace(/\./g, '-').replace(/\//g, '-');
                             return strVal;
                         };
 
