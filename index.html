@@ -553,7 +553,7 @@
 
                 const headerStyle = { font: { name: '맑은 고딕', sz: 11, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "047857" } }, alignment: { horizontal: "center", vertical: "center" } };
                 const dataStyle = { font: { name: '맑은 고딕', sz: 10 }, alignment: { horizontal: "center", vertical: "center" } };
-                const logoStyle = { font: { name: 'Arial Black', sz: 12, bold: true, italic: true, color: { rgb: "1E3A8A" } }, alignment: { horizontal: "right", vertical: "center" } };
+                const logoStyle = { font: { name: 'Arial Black', sz: 10, bold: true, italic: true, color: { rgb: "1E3A8A" } }, alignment: { horizontal: "right", vertical: "center" } };
 
                 const range = XLSX.utils.decode_range(ws['!ref']);
                 for (let R = range.s.r; R <= range.e.r; ++R) {
@@ -1027,15 +1027,16 @@
                                         </div>
                                     </div>
                                     <div className="print-footer w-full mt-auto pt-8">
-                                        <div className="flex justify-between items-end mb-3 border-b border-slate-200 pb-2">
-                                            <div className="font-bold text-slate-500" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>제출일: {new Date().toLocaleDateString()}</div>
-                                            <div className="text-right"><a href="https://tourmaker.kr" target="_blank" rel="noreferrer"><img src={TM_LOGO} className="h-5 md:h-6 opacity-80 hover:opacity-100 transition" alt="Tourmaker Logo" /></a></div>
-                                        </div>
-                                        <div className="bg-[#f8f9fa] py-3 md:py-4 px-4 md:px-6 rounded-lg flex flex-col items-end justify-center border border-slate-100 gap-1.5">
-                                            <img src={TM_FOOTER_LOGO} alt="Tourmaker" className="h-5 md:h-7 object-contain opacity-90" />
-                                            <p className="text-[#6c757d] leading-relaxed m-0 font-medium text-right" style={{ fontSize: `${Math.max(7, docFontSize - 3)}pt` }}>
-                                                본 시스템은 투어메이커의 기획과 트래블 테크 기술 제휴로 제작되었습니다.
-                                            </p>
+                                        <div className="flex justify-between items-end border-t-[2px] border-slate-800 pt-4 pb-2">
+                                            <div className="font-bold text-slate-500" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>
+                                                제출일: {new Date().toLocaleDateString()}
+                                            </div>
+                                            <div className="flex flex-col items-end justify-center gap-1.5">
+                                                <img src={TM_FOOTER_LOGO} alt="Tourmaker" className="h-5 md:h-7 object-contain opacity-90" />
+                                                <p className="text-[#6c757d] leading-relaxed m-0 font-bold text-right" style={{ fontSize: `${Math.max(7, docFontSize - 3)}pt` }}>
+                                                    [System Powered by TOURMAKER]<br/>본 시스템은 투어메이커의 기획과 트래블 테크 기술 제휴로 제작되었습니다.
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1199,19 +1200,16 @@
                                                 </div>
 
                                                 <div className="print-footer w-full mt-auto pt-8">
-                                                    <div className="flex justify-between items-end mb-3 border-b border-slate-200 pb-2">
-                                                        <div className="font-bold text-slate-500" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>제출일: {new Date().toLocaleDateString()}</div>
-                                                        <div className="text-right">
-                                                            <a href="https://tourmaker.kr" target="_blank" rel="noreferrer">
-                                                                <img src={TM_LOGO} className="h-5 md:h-6 opacity-80 hover:opacity-100 transition" alt="Tourmaker Logo" />
-                                                            </a>
+                                                    <div className="flex justify-between items-end border-t-[2px] border-slate-800 pt-4 pb-2">
+                                                        <div className="font-bold text-slate-500" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>
+                                                            제출일: {new Date().toLocaleDateString()}
                                                         </div>
-                                                    </div>
-                                                    <div className="bg-[#f8f9fa] py-3 md:py-4 px-4 md:px-6 rounded-lg flex flex-col items-end justify-center border border-slate-100 gap-1.5">
-                                                        <img src={TM_FOOTER_LOGO} alt="Tourmaker" className="h-5 md:h-7 object-contain opacity-90" />
-                                                        <p className="text-[#6c757d] leading-relaxed m-0 font-medium text-right" style={{ fontSize: `${Math.max(7, docFontSize - 3)}pt` }}>
-                                                            본 시스템은 투어메이커의 기획과 트래블 테크 기술 제휴로 제작되었습니다.
-                                                        </p>
+                                                        <div className="flex flex-col items-end justify-center gap-1.5">
+                                                            <img src={TM_FOOTER_LOGO} alt="Tourmaker" className="h-5 md:h-7 object-contain opacity-90" />
+                                                            <p className="text-[#6c757d] leading-relaxed m-0 font-bold text-right" style={{ fontSize: `${Math.max(7, docFontSize - 3)}pt` }}>
+                                                                [System Powered by TOURMAKER]<br/>본 시스템은 투어메이커의 기획과 트래블 테크 기술 제휴로 제작되었습니다.
+                                                            </p>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
