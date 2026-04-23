@@ -6,7 +6,7 @@
     
     <!-- 카카오톡 공유 썸네일 및 메타 태그 -->
     <meta property="og:title" content="투어메이커 스마트 명단/루밍 작성 폼">
-    <meta property="og:description" content="담당자님, 여행자 명단 및 방배정(루밍리스트)을 작성 후 PDF로 저장해 전달해주세요.">
+    <meta property="og:description" content="담당자님, 여행자 명단 및 방배정(루밍리스트)을 작성 후 PDF 또는 엑셀로 저장해 전달해주세요.">
     <meta property="og:image" content="https://blogger.googleusercontent.com/img/a/AVvXsEjQVWjqNlaxb98AP-qG4LHAIN9gK9sn4cGowBArA_-DUz0rxQycXrr3vFhvUqMM9Pa5tP2cDBxqBzW_re-HqzVLVAngEO8FAORbaQ36ANr0BULZ_q2PBFdDbEUJhQqr7LCGGuXO1snQ-bYx5SdFP1GZllmKNTxYv66H8E7zYyvQLsq3jour2LNjQ4PyAbo">
     <meta property="og:type" content="website">
     
@@ -254,13 +254,27 @@
             const [modal, setModal] = useState({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null });
 
             const showAlert = (message) => {
-                setModal({ isOpen: true, type: 'alert', message, inputValue: '', onConfirm: () => setModal({ ...modal, isOpen: false }) });
+                setModal({ isOpen: true, type: 'alert', message, inputValue: '', onConfirm: () => setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null }) });
             };
 
             const showPrompt = (message, defaultValue, callback) => {
                 setModal({ isOpen: true, type: 'prompt', message, inputValue: defaultValue, 
-                    onConfirm: () => { setModal({ ...modal, isOpen: false }); }, 
-                    onCancel: () => { setModal({ ...modal, isOpen: false }); } 
+                    onConfirm: () => { setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null }); }, 
+                    onCancel: () => { setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null }); } 
+                });
+            };
+
+            const showPrintConfirm = () => {
+                setModal({
+                    isOpen: true,
+                    type: 'confirm',
+                    message: "🖨️ 인쇄 전 필수 확인사항\n\n1. 용지 크기: A4\n2. 레이아웃: 세로\n3. 옵션: '배경 그래픽 포함' 체크\n\n* 프린터 환경에 따라 표가 잘리거나 양식이 깨질 수 있습니다.\n* 가급적 상단의 [완성본 엑셀 저장] 버튼을 이용해 파일 형태로 담당자에게 전달해 주시면 가장 오류가 적습니다.\n\n그래도 인쇄를 진행하시겠습니까?",
+                    inputValue: '',
+                    onConfirm: () => { 
+                        setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null }); 
+                        setTimeout(() => { window.print(); }, 300); 
+                    },
+                    onCancel: () => { setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null }); }
                 });
             };
 
@@ -890,8 +904,12 @@
             };
 
             const handlePrint = () => {
-                if(isSharedMode) showAlert("PDF 파일로 인쇄 후 투어메이커 담당자에게 전달해 주시면 즉시 공유하겠습니다.");
-                setTimeout(() => { window.print(); }, 100);
+                if(isSharedMode) {
+                    // 고객 뷰일 때는 인쇄 품질 경고 및 엑셀 다운로드 권장 모달을 띄움
+                    showPrintConfirm();
+                } else {
+                    setTimeout(() => { window.print(); }, 100);
+                }
             };
 
             return (
@@ -937,22 +955,34 @@
                         {/* TAB 1: 여행자 명단 */}
                         {/* ========================================================================= */}
                         <div className={activeMainTab === 'traveler' ? 'block' : 'hidden'}>
-                            <div className="no-print max-w-[1400px] mx-auto mb-3 flex flex-col gap-2 px-3 md:px-4 bg-blue-50 py-3 rounded border border-blue-100">
+                            {isSharedMode && (
+                                <div className="no-print max-w-[1400px] mx-auto px-3 mt-4 mb-1">
+                                    <div className="bg-indigo-50 border-l-4 border-indigo-500 p-3 rounded text-[13px] md:text-sm text-indigo-800 font-bold flex flex-col md:flex-row justify-between items-start md:items-center gap-2 shadow-sm">
+                                        <div>
+                                            <i className="fas fa-info-circle mr-1 text-indigo-600"></i>
+                                            담당자님, 작성을 모두 마치신 후 가급적 우측의 <span className="text-indigo-900 bg-indigo-100 px-1.5 py-0.5 rounded mx-0.5">완성본 엑셀 저장</span> 버튼을 눌러 엑셀 파일로 전달해 주시면 가장 오류가 적습니다.
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="no-print max-w-[1400px] mx-auto mb-3 flex flex-col gap-2 px-3 md:px-4 bg-blue-50 py-3 rounded border border-blue-100 mt-2">
                                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                                     <p className="text-[11px] md:text-sm text-blue-800 font-bold leading-relaxed">
                                         <i className="fas fa-lightbulb text-amber-500 mr-2"></i> 셀을 마우스로 클릭해 직접 타이핑하세요. (좌측 ≡ 드래그로 행 순서 변경 가능)
                                     </p>
                                     <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap justify-end">
-                                        {!isSharedMode && (
-                                            <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded shadow-sm border border-emerald-400">
-                                                <button onClick={downloadExcelTemplate} className="text-[11px] md:text-xs font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 transition whitespace-nowrap"><i className="fas fa-download"></i> 양식 다운</button>
-                                                <div className="w-[1px] h-3 bg-emerald-300"></div>
-                                                <label htmlFor="excel-upload" className="cursor-pointer text-[11px] md:text-xs font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 transition m-0 whitespace-nowrap"><i className="fas fa-upload"></i> 명단 업로드</label>
-                                                <input type="file" id="excel-upload" accept=".xlsx, .xls" className="hidden" onChange={importExcelData} />
-                                                <div className="w-[1px] h-3 bg-emerald-300"></div>
-                                                <button onClick={exportTravelersToExcel} className="text-[11px] md:text-xs font-black text-emerald-700 hover:text-emerald-900 flex items-center gap-1 transition whitespace-nowrap"><i className="fas fa-file-excel"></i> 완성본 저장</button>
-                                            </div>
-                                        )}
+                                        <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded shadow-sm border border-emerald-400">
+                                            {!isSharedMode && (
+                                                <React.Fragment>
+                                                    <button onClick={downloadExcelTemplate} className="text-[11px] md:text-xs font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 transition whitespace-nowrap"><i className="fas fa-download"></i> 양식 다운</button>
+                                                    <div className="w-[1px] h-3 bg-emerald-300"></div>
+                                                    <label htmlFor="excel-upload" className="cursor-pointer text-[11px] md:text-xs font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 transition m-0 whitespace-nowrap"><i className="fas fa-upload"></i> 명단 업로드</label>
+                                                    <input type="file" id="excel-upload" accept=".xlsx, .xls" className="hidden" onChange={importExcelData} />
+                                                    <div className="w-[1px] h-3 bg-emerald-300"></div>
+                                                </React.Fragment>
+                                            )}
+                                            <button onClick={exportTravelersToExcel} className="text-[11px] md:text-xs font-black text-emerald-700 hover:text-emerald-900 flex items-center gap-1 transition whitespace-nowrap"><i className="fas fa-file-excel"></i> 완성본 엑셀 저장</button>
+                                        </div>
                                         <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded shadow-sm border border-slate-200">
                                             <span className="text-xs font-bold text-slate-500 whitespace-nowrap"><i className="fas fa-search-plus"></i> 크기:</span>
                                             <button onClick={() => setDocFontSize(Math.max(8, docFontSize - 0.5))} className="w-5 h-5 flex justify-center items-center bg-slate-100 hover:bg-slate-200 rounded text-slate-600 font-bold">-</button>
@@ -1052,6 +1082,14 @@
                         <div className={activeMainTab === 'rooming' ? 'block' : 'hidden'}>
                             <div className="w-full max-w-full xl:max-w-[1400px] mx-auto p-0 sm:p-4 md:p-6 print-rooming-list">
                                 <div className="no-print mb-4 md:mb-6">
+                                    {isSharedMode && (
+                                        <div className="mb-4 bg-indigo-50 border-l-4 border-indigo-500 p-3 rounded text-[13px] md:text-sm text-indigo-800 font-bold flex flex-col md:flex-row justify-between items-start md:items-center gap-2 shadow-sm">
+                                            <div>
+                                                <i className="fas fa-info-circle mr-1 text-indigo-600"></i>
+                                                담당자님, 작성을 모두 마치신 후 가급적 우측의 <span className="text-indigo-900 bg-indigo-100 px-1.5 py-0.5 rounded mx-0.5">완성본 엑셀 저장</span> 버튼을 눌러 엑셀 파일로 전달해 주시면 가장 오류가 적습니다.
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4 bg-blue-50 py-3 px-3 md:px-4 rounded border border-blue-100">
                                         
                                         <div className="flex flex-col sm:flex-row gap-2 md:items-center">
@@ -1065,13 +1103,16 @@
                                         </div>
                                         
                                         <div className="flex items-center gap-2 flex-wrap justify-end">
-                                            {!isSharedMode && (
-                                                <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded shadow-sm border border-emerald-400">
-                                                    <button onClick={downloadRoomingExcelTemplate} className="text-[11px] md:text-xs font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 transition whitespace-nowrap" title="루밍 엑셀 양식 다운로드"><i className="fas fa-download"></i> 양식 다운</button>
-                                                    <div className="w-[1px] h-3 bg-emerald-300"></div>
-                                                    <button onClick={exportRoomingToExcel} className="text-[11px] md:text-xs font-black text-emerald-700 hover:text-emerald-900 flex items-center gap-1 transition whitespace-nowrap" title="방배정 엑셀로 내보내기"><i className="fas fa-file-excel"></i> 완성본 저장</button>
-                                                </div>
-                                            )}
+                                            <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded shadow-sm border border-emerald-400">
+                                                {!isSharedMode && (
+                                                    <React.Fragment>
+                                                        <button onClick={downloadRoomingExcelTemplate} className="text-[11px] md:text-xs font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 transition whitespace-nowrap" title="루밍 엑셀 양식 다운로드"><i className="fas fa-download"></i> 양식 다운</button>
+                                                        <div className="w-[1px] h-3 bg-emerald-300"></div>
+                                                    </React.Fragment>
+                                                )}
+                                                <button onClick={exportRoomingToExcel} className="text-[11px] md:text-xs font-black text-emerald-700 hover:text-emerald-900 flex items-center gap-1 transition whitespace-nowrap" title="방배정 엑셀로 내보내기"><i className="fas fa-file-excel"></i> 완성본 엑셀 저장</button>
+                                            </div>
+                                            
                                             <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded shadow-sm border border-slate-200">
                                                 <span className="text-xs font-bold text-slate-500"><i className="fas fa-search-plus"></i> 크기:</span>
                                                 <button onClick={() => setDocFontSize(Math.max(8, docFontSize - 0.5))} className="w-5 h-5 flex justify-center items-center bg-slate-100 hover:bg-slate-200 rounded text-slate-600 font-bold">-</button>
@@ -1226,11 +1267,13 @@
                         {modal.isOpen && (
                             <div className="no-print fixed inset-0 bg-slate-900 bg-opacity-50 flex items-center justify-center z-[99999] px-4 backdrop-blur-sm transition-opacity">
                                 <div className="bg-white rounded-xl shadow-2xl max-w-sm md:max-w-md w-full p-6 text-center transform transition-all scale-100">
-                                    <p className="text-slate-800 font-bold mb-6 text-[14px] md:text-[15px] leading-relaxed whitespace-pre-wrap">{modal.message}</p>
+                                    <p className="text-slate-800 font-bold mb-6 text-[14px] md:text-[15px] leading-relaxed whitespace-pre-wrap text-left pl-2">{modal.message}</p>
                                     {modal.type === 'prompt' && <input type="text" className="w-full border-2 border-blue-200 focus:border-blue-500 rounded-lg px-4 py-2.5 mb-6 outline-none text-slate-700 font-bold text-center" value={modal.inputValue} readOnly />}
                                     <div className="flex justify-center gap-3">
-                                        {modal.type === 'prompt' && <button onClick={modal.onCancel} className="px-5 py-2.5 bg-slate-100 text-slate-600 rounded-lg font-bold hover:bg-slate-200">닫기</button>}
-                                        <button onClick={modal.onConfirm} className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-sm">확인</button>
+                                        {(modal.type === 'prompt' || modal.type === 'confirm') && <button onClick={modal.onCancel} className="px-5 py-2.5 bg-slate-100 text-slate-600 rounded-lg font-bold hover:bg-slate-200">취소(닫기)</button>}
+                                        <button onClick={modal.onConfirm} className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-sm">
+                                            {modal.type === 'confirm' ? "그래도 인쇄하기" : "확인"}
+                                        </button>
                                     </div>
                                 </div>
                             </div>
