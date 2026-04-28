@@ -1150,23 +1150,32 @@
                             </div>
 
                             {travelerPages.map((page) => (
-                                <div key={page.pageIndex} className="print-page bg-white w-full max-w-full xl:max-w-[1400px] mx-auto shadow-xl p-3 sm:p-5 md:p-8 xl:px-12 flex flex-col justify-between border border-slate-200 mb-8 box-border" style={{ minHeight: '275mm' }}>
+                                <div key={page.pageIndex} className="print-page bg-white w-full max-w-full xl:max-w-[1400px] mx-auto shadow-xl p-3 sm:p-5 md:p-8 xl:px-12 flex flex-col justify-between border border-slate-200 mb-8 box-border" style={{ minHeight: '265mm' }}>
                                     <div className="w-full flex-1 flex flex-col overflow-hidden">
-                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-[3px] border-slate-900 pb-3 md:pb-4 mb-3 gap-4 w-full box-border">
-                                            <div className="space-y-3 flex-1 w-full min-w-0">
-                                                <h2 className="font-black tracking-tighter text-slate-900 mt-2" style={{ fontSize: `${docFontSize * 2.2}pt` }}>OVERSEAS TRAVELERS LIST</h2>
-                                                <div className="flex flex-col gap-1.5 font-bold text-slate-700 w-full print:max-w-none max-w-full sm:max-w-[600px] box-border">
-                                                    <HeaderField label="GROUP NAME" value={commonHeader.groupName} onChange={(v) => setCommonHeader({ ...commonHeader, groupName: v })} fontSize={docFontSize} placeholder="단체명" />
-                                                    <HeaderField label="DATE" value={commonHeader.date} onChange={(v) => setCommonHeader({ ...commonHeader, date: v })} fontSize={docFontSize} placeholder="YYYY.MM.DD" />
-                                                    <HeaderField label="NATION" value={commonHeader.location} onChange={(v) => setCommonHeader({ ...commonHeader, location: v })} fontSize={docFontSize} placeholder="지역" />
-                                                    <HeaderField label="NUMBER" value={commonHeader.number} onChange={(v) => setCommonHeader({ ...commonHeader, number: v })} fontSize={docFontSize} placeholder="인원" />
+                                        
+                                        {/* 1. 여행자 명단 헤더 (1페이지만 표시) */}
+                                        {page.pageIndex === 0 ? (
+                                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-[3px] border-slate-900 pb-3 md:pb-4 mb-3 gap-4 w-full box-border">
+                                                <div className="space-y-3 flex-1 w-full min-w-0">
+                                                    <h2 className="font-black tracking-tighter text-slate-900 mt-2" style={{ fontSize: `${docFontSize * 2.2}pt` }}>OVERSEAS TRAVELERS LIST</h2>
+                                                    <div className="flex flex-col gap-1.5 font-bold text-slate-700 w-full print:max-w-none max-w-full sm:max-w-[600px] box-border">
+                                                        <HeaderField label="GROUP NAME" value={commonHeader.groupName} onChange={(v) => setCommonHeader({ ...commonHeader, groupName: v })} fontSize={docFontSize} placeholder="단체명" />
+                                                        <HeaderField label="DATE" value={commonHeader.date} onChange={(v) => setCommonHeader({ ...commonHeader, date: v })} fontSize={docFontSize} placeholder="YYYY.MM.DD" />
+                                                        <HeaderField label="NATION" value={commonHeader.location} onChange={(v) => setCommonHeader({ ...commonHeader, location: v })} fontSize={docFontSize} placeholder="지역" />
+                                                        <HeaderField label="NUMBER" value={commonHeader.number} onChange={(v) => setCommonHeader({ ...commonHeader, number: v })} fontSize={docFontSize} placeholder="인원" />
+                                                    </div>
+                                                </div>
+                                                <div className="text-left sm:text-right flex flex-col items-start sm:items-end w-full sm:w-auto self-end flex-shrink-0">
+                                                    <div className="text-red-500 font-black italic mb-1 md:mb-0 bg-red-50 px-3 py-1 border border-red-200" style={{ fontSize: `${Math.max(9, docFontSize - 1)}pt` }}>여권 만료일 6개월 확인필</div>
+                                                    {totalTravelerPages > 1 && <div className="mt-2 text-slate-500 font-bold" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>Page {page.pageIndex + 1} / {totalTravelerPages}</div>}
                                                 </div>
                                             </div>
-                                            <div className="text-left sm:text-right flex flex-col items-start sm:items-end w-full sm:w-auto self-end flex-shrink-0">
-                                                <div className="text-red-500 font-black italic mb-1 md:mb-0 bg-red-50 px-3 py-1 border border-red-200" style={{ fontSize: `${Math.max(9, docFontSize - 1)}pt` }}>여권 만료일 6개월 확인필</div>
-                                                {totalTravelerPages > 1 && <div className="mt-2 text-slate-500 font-bold" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>Page {page.pageIndex + 1} / {totalTravelerPages}</div>}
+                                        ) : (
+                                            <div className="flex justify-between items-end w-full box-border mb-3">
+                                                <div className="text-red-500 font-black italic bg-red-50 px-3 py-1 border border-red-200" style={{ fontSize: `${Math.max(9, docFontSize - 1)}pt` }}>여권 만료일 6개월 확인필</div>
+                                                {totalTravelerPages > 1 && <div className="text-slate-500 font-bold" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>Page {page.pageIndex + 1} / {totalTravelerPages}</div>}
                                             </div>
-                                        </div>
+                                        )}
 
                                         <div className="table-wrapper w-full relative flex-1 box-border">
                                             <table className="w-full border-collapse min-w-full print:min-w-0 border-b-[3px] print:border-b-2 border-slate-800" style={{ fontSize: `${docFontSize}pt`, tableLayout: 'fixed' }}>
@@ -1230,19 +1239,23 @@
                                             </table>
                                         </div>
                                     </div>
-                                    <div className="print-footer w-full mt-auto pt-8">
-                                        <div className="flex justify-between items-end border-t-[2px] border-slate-800 pt-4 pb-2 w-full">
-                                            <div className="font-bold text-slate-500" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>
-                                                작성일: {new Date().toLocaleDateString()}
-                                            </div>
-                                            <div className="flex flex-col items-end justify-center gap-1.5 pr-1">
-                                                <img src={TM_FOOTER_LOGO} alt="Tourmaker" className="h-6 md:h-8 object-contain" />
-                                                <p className="text-[#6c757d] leading-relaxed m-0 font-bold text-right tracking-tight" style={{ fontSize: `${Math.max(7, docFontSize - 3)}pt` }}>
-                                                    본 시스템은 <span className="text-slate-800 font-black">{commonHeader.groupName || '해당 단체'}</span>의 기획과 투어메이커의 트래블 테크 기술 제휴로 제작되었습니다.
-                                                </p>
+                                    
+                                    {/* 2. 여행자 명단 푸터 (마지막 페이지만 표시) */}
+                                    {page.pageIndex === totalTravelerPages - 1 && (
+                                        <div className="print-footer w-full mt-auto pt-8">
+                                            <div className="flex justify-between items-end border-t-[2px] border-slate-800 pt-4 pb-2 w-full">
+                                                <div className="font-bold text-slate-500" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>
+                                                    작성일: {new Date().toLocaleDateString()}
+                                                </div>
+                                                <div className="flex flex-col items-end justify-center gap-1.5 pr-1">
+                                                    <img src={TM_FOOTER_LOGO} alt="Tourmaker" className="h-6 md:h-8 object-contain" />
+                                                    <p className="text-[#6c757d] leading-relaxed m-0 font-bold text-right tracking-tight" style={{ fontSize: `${Math.max(7, docFontSize - 3)}pt` }}>
+                                                        본 시스템은 <span className="text-slate-800 font-black">{commonHeader.groupName || '해당 단체'}</span>의 기획과 투어메이커의 트래블 테크 기술 제휴로 제작되었습니다.
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             ))}
                             <div className="no-print mt-6 mb-12 flex justify-center">
@@ -1340,34 +1353,41 @@
                                             <div key={pageIndex} className={`print-page box-border overflow-hidden bg-white shadow-xl p-3 sm:p-5 md:p-8 border-t-[4px] md:border-t-[6px] border-slate-800 print:shadow-none print:p-0 print:border-none print:m-0 relative flex flex-col justify-between`} style={{ minHeight: '275mm', fontSize: `${docFontSize}pt` }}>
                                                 <div className="flex-1 flex flex-col w-full box-border">
                                                     
-                                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-[3px] border-slate-900 pb-3 md:pb-4 mb-3 gap-4 w-full box-border">
-                                                        <div className="space-y-3 flex-1 w-full min-w-0">
-                                                            <h2 className="font-black tracking-tighter text-slate-900 mt-2" style={{ fontSize: `${docFontSize * 2.2}pt` }}>ROOMING LIST</h2>
-                                                            <div className="flex flex-col gap-1.5 font-bold text-slate-700 w-full print:max-w-none max-w-full sm:max-w-[750px] box-border">
-                                                                <HeaderField label="GROUP" value={commonHeader.groupName} onChange={(v) => setCommonHeader({ ...commonHeader, groupName: v })} isMain={true} fontSize={docFontSize} placeholder="단체명" readOnly={isSharedMode} />
-                                                                <HeaderField label="DATE" value={commonHeader.date} onChange={(v) => setCommonHeader({ ...commonHeader, date: v })} fontSize={docFontSize} placeholder="일정" readOnly={isSharedMode} />
-                                                                <HeaderField label="LOCATION" value={commonHeader.location} onChange={(v) => setCommonHeader({ ...commonHeader, location: v })} fontSize={docFontSize} placeholder="지역" readOnly={isSharedMode} />
-                                                                
-                                                                <div className="flex items-center group w-full mt-1 md:mt-0 box-border">
-                                                                    <span className="font-black text-slate-500 tracking-widest uppercase flex-shrink-0 whitespace-nowrap" style={{ fontSize: `${Math.max(8, docFontSize - 1.5)}pt`, width: `${Math.max(140, docFontSize * 11)}px` }}>TOTAL PAX</span>
-                                                                    <div className="font-bold text-slate-800 flex-1 flex flex-row items-center gap-2 md:gap-3 px-1 md:px-2 whitespace-nowrap overflow-hidden" style={{ fontSize: `${docFontSize}pt` }}>
-                                                                        <div className="flex items-center gap-1.5 md:gap-2">
-                                                                            <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">배정 인원: <span className="text-blue-600">{roomStats.total}</span>명</span>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-1.5 hidden sm:flex">
-                                                                            <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200">TWN: {roomStats.roomCounts.TWIN}</span>
-                                                                            <span className="bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200">TRP: {roomStats.roomCounts.TRIPLE}</span>
-                                                                            <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">SGL: {roomStats.roomCounts.SINGLE}</span>
-                                                                            {roomStats.roomCounts.QUAD > 0 && <span className="bg-violet-50 text-violet-700 px-1.5 py-0.5 rounded border border-violet-200">QAD: {roomStats.roomCounts.QUAD}</span>}
+                                                    {/* 3. 룸 리스트 헤더 (1페이지만 표시) */}
+                                                    {pageIndex === 0 ? (
+                                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-[3px] border-slate-900 pb-3 md:pb-4 mb-3 gap-4 w-full box-border">
+                                                            <div className="space-y-3 flex-1 w-full min-w-0">
+                                                                <h2 className="font-black tracking-tighter text-slate-900 mt-2" style={{ fontSize: `${docFontSize * 2.2}pt` }}>ROOMING LIST</h2>
+                                                                <div className="flex flex-col gap-1.5 font-bold text-slate-700 w-full print:max-w-none max-w-full sm:max-w-[750px] box-border">
+                                                                    <HeaderField label="GROUP" value={commonHeader.groupName} onChange={(v) => setCommonHeader({ ...commonHeader, groupName: v })} isMain={true} fontSize={docFontSize} placeholder="단체명" readOnly={isSharedMode} />
+                                                                    <HeaderField label="DATE" value={commonHeader.date} onChange={(v) => setCommonHeader({ ...commonHeader, date: v })} fontSize={docFontSize} placeholder="일정" readOnly={isSharedMode} />
+                                                                    <HeaderField label="LOCATION" value={commonHeader.location} onChange={(v) => setCommonHeader({ ...commonHeader, location: v })} fontSize={docFontSize} placeholder="지역" readOnly={isSharedMode} />
+                                                                    
+                                                                    <div className="flex items-center group w-full mt-1 md:mt-0 box-border">
+                                                                        <span className="font-black text-slate-500 tracking-widest uppercase flex-shrink-0 whitespace-nowrap" style={{ fontSize: `${Math.max(8, docFontSize - 1.5)}pt`, width: `${Math.max(140, docFontSize * 11)}px` }}>TOTAL PAX</span>
+                                                                        <div className="font-bold text-slate-800 flex-1 flex flex-row items-center gap-2 md:gap-3 px-1 md:px-2 whitespace-nowrap overflow-hidden" style={{ fontSize: `${docFontSize}pt` }}>
+                                                                            <div className="flex items-center gap-1.5 md:gap-2">
+                                                                                <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">배정 인원: <span className="text-blue-600">{roomStats.total}</span>명</span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-1.5 hidden sm:flex">
+                                                                                <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200">TWN: {roomStats.roomCounts.TWIN}</span>
+                                                                                <span className="bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200">TRP: {roomStats.roomCounts.TRIPLE}</span>
+                                                                                <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">SGL: {roomStats.roomCounts.SINGLE}</span>
+                                                                                {roomStats.roomCounts.QUAD > 0 && <span className="bg-violet-50 text-violet-700 px-1.5 py-0.5 rounded border border-violet-200">QAD: {roomStats.roomCounts.QUAD}</span>}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
+                                                            <div className="text-left sm:text-right flex flex-col items-start sm:items-end w-full sm:w-auto self-end flex-shrink-0">
+                                                                {totalRoomPages > 1 && <div className="mt-2 text-slate-500 font-bold" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>Page {pageIndex + 1} / {totalRoomPages}</div>}
+                                                            </div>
                                                         </div>
-                                                        <div className="text-left sm:text-right flex flex-col items-start sm:items-end w-full sm:w-auto self-end flex-shrink-0">
-                                                            {totalRoomPages > 1 && <div className="mt-2 text-slate-500 font-bold" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>Page {pageIndex + 1} / {totalRoomPages}</div>}
+                                                    ) : (
+                                                        <div className="flex justify-end items-end w-full box-border mb-3">
+                                                            {totalRoomPages > 1 && <div className="text-slate-500 font-bold" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>Page {pageIndex + 1} / {totalRoomPages}</div>}
                                                         </div>
-                                                    </div>
+                                                    )}
 
                                                     <div className="flex justify-between items-center mb-2 gap-2">
                                                         {isInternationalRooming && !isSharedMode ? <p className="font-bold text-red-600 no-print" style={{ fontSize: `${Math.max(9, docFontSize - 1)}pt` }}><i className="fas fa-exclamation-circle mr-1"></i> 자동 변환된 영문명은 여권과 상이할 수 있습니다. 꼭 재확인 바랍니다.</p> : <div></div>}
@@ -1420,19 +1440,22 @@
                                                     </div>
                                                 </div>
 
-                                                <div className="print-footer w-full mt-auto pt-8">
-                                                    <div className="flex justify-between items-end border-t-[2px] border-slate-800 pt-4 pb-2 w-full">
-                                                        <div className="font-bold text-slate-500" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>
-                                                            작성일: {new Date().toLocaleDateString()}
-                                                        </div>
-                                                        <div className="flex flex-col items-end justify-center gap-1.5 pr-1">
-                                                            <img src={TM_FOOTER_LOGO} alt="Tourmaker" className="h-6 md:h-8 object-contain" />
-                                                            <p className="text-[#6c757d] leading-relaxed m-0 font-bold text-right tracking-tight" style={{ fontSize: `${Math.max(7, docFontSize - 3)}pt` }}>
-                                                                본 시스템은 <span className="text-slate-800 font-black">{commonHeader.groupName || '해당 단체'}</span>의 기획과 투어메이커의 트래블 테크 기술 제휴로 제작되었습니다.
-                                                            </p>
+                                                {/* 4. 룸 리스트 푸터 (마지막 페이지만 표시) */}
+                                                {pageIndex === totalRoomPages - 1 && (
+                                                    <div className="print-footer w-full mt-auto pt-8 print:pt-2">
+                                                        <div className="flex justify-between items-end border-t-[2px] border-slate-800 pt-4 pb-2 w-full">
+                                                            <div className="font-bold text-slate-500" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>
+                                                                작성일: {new Date().toLocaleDateString()}
+                                                            </div>
+                                                            <div className="flex flex-col items-end justify-center gap-1.5 pr-1">
+                                                                <img src={TM_FOOTER_LOGO} alt="Tourmaker" className="h-6 md:h-8 object-contain" />
+                                                                <p className="text-[#6c757d] leading-relaxed m-0 font-bold text-right tracking-tight" style={{ fontSize: `${Math.max(7, docFontSize - 3)}pt` }}>
+                                                                    본 시스템은 <span className="text-slate-800 font-black">{commonHeader.groupName || '해당 단체'}</span>의 기획과 투어메이커의 트래블 테크 기술 제휴로 제작되었습니다.
+                                                                </p>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
+                                                )}
                                             </div>
                                         );
                                     })}
