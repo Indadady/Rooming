@@ -1538,11 +1538,11 @@
                                             <span className="text-sm font-bold text-slate-800">위 개인정보 수집·이용 안내에 동의합니다. (필수)</span>
                                         </label>
 
-                                        <p className="text-sm text-slate-700 font-bold mb-2">담당자 확인을 위해 '단체명' 또는 '성함'을 입력해 주세요.</p>
+                                        <p className="text-sm text-slate-700 font-bold mb-2">담당자 확인을 위해 제출자 '성함' 또는 '소속'을 입력해 주세요.</p>
                                         <input type="text" className="w-full border-2 border-blue-200 focus:border-blue-500 rounded-lg px-4 py-2.5 mb-6 outline-none text-slate-700 font-bold" 
                                             value={modal.inputValue} 
                                             onChange={(e) => setModal({...modal, inputValue: e.target.value})} 
-                                            placeholder="예: 강원고 김철수" 
+                                            placeholder="예: 홍길동 (또는 소속 단체명)" 
                                         />
 
                                         <div className="flex justify-center gap-3">
