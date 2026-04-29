@@ -64,7 +64,6 @@
             }
             .print-page:last-child { page-break-after: auto !important; }
             
-            /* [수정] height: 100%를 제거하여 마지막 페이지의 표가 비정상적으로 늘어나는 현상 완벽 방지 */
             table { border-collapse: collapse !important; width: 100% !important; max-width: 100% !important; table-layout: fixed !important; }
             thead { display: table-header-group; }
             tbody { display: table-row-group; }
@@ -78,7 +77,6 @@
             
             .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; display: flex !important; flex-direction: column !important; height: 100% !important; }
             
-            /* [수정] flex: 1을 제거하여 루밍 리스트 박스가 위아래로 기괴하게 늘어나는 것 방지 */
             .room-row-wrapper { display: flex !important; align-items: stretch !important; break-inside: avoid; }
             .room-row { padding: 0 !important; break-inside: avoid; flex: 1 !important; display: flex !important; align-items: stretch !important; border-bottom: 1px solid #cbd5e1 !important; }
             
@@ -496,14 +494,22 @@
                 }));
             };
 
-            // [수정] 강제 빈칸 추가(Dummy row) 로직을 모두 제거하고 데이터 있는 만큼만 렌더링
-            const TRAVELER_ROWS_PER_PAGE = 26; 
+            // [핵심 변경] 페이지별 유동적 인원 할당 로직 적용
+            // 1페이지는 헤더 공간을 차지하므로 23명 배정, 나머지 페이지는 27명 배정하여 밀림/짤림 완벽 방지
+            const FIRST_PAGE_TRAVELER_ROWS = 23; 
+            const OTHER_PAGE_TRAVELER_ROWS = 27; 
             const travelerPages = [];
-            const totalTravelerPages = Math.max(1, Math.ceil(travelers.length / TRAVELER_ROWS_PER_PAGE));
-            for (let i = 0; i < totalTravelerPages; i++) {
-                const pageData = travelers.slice(i * TRAVELER_ROWS_PER_PAGE, (i + 1) * TRAVELER_ROWS_PER_PAGE);
-                travelerPages.push({ pageIndex: i, data: pageData });
+            let currentTravelerList = [...travelers];
+            let tPageIndex = 0;
+
+            while (currentTravelerList.length > 0 || tPageIndex === 0) {
+                const limit = tPageIndex === 0 ? FIRST_PAGE_TRAVELER_ROWS : OTHER_PAGE_TRAVELER_ROWS;
+                const pageData = currentTravelerList.slice(0, limit);
+                currentTravelerList = currentTravelerList.slice(limit);
+                travelerPages.push({ pageIndex: tPageIndex, data: pageData });
+                tPageIndex++;
             }
+            const totalTravelerPages = travelerPages.length;
 
             // [여행자 엑셀 처리 로직]
             const downloadExcelTemplate = () => {
@@ -958,14 +964,21 @@
             const removeRoom = (globalIdx) => setRooms(prev => prev.filter((_, idx) => idx !== globalIdx));
             const addRoom = () => setRooms(prev => [...prev, { id: Date.now() + Math.random(), roomNo: '', type: 'TWIN', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }]);
 
-            // [수정] 강제 빈칸 추가(Dummy row) 로직 제거하고 데이터 있는 만큼만 렌더링
-            const ROOMS_PER_PAGE = isInternationalRooming ? 20 : 28; 
+            // [핵심 변경] 방 배정 페이지도 유동적 객실 할당 적용하여 레이아웃 최적화
+            const FIRST_PAGE_ROOMS = isInternationalRooming ? 17 : 24; 
+            const OTHER_PAGE_ROOMS = isInternationalRooming ? 20 : 28; 
             const roomPages = [];
-            const totalRoomPages = Math.max(1, Math.ceil(rooms.length / ROOMS_PER_PAGE));
-            for (let i = 0; i < totalRoomPages; i++) {
-                const pageRooms = rooms.slice(i * ROOMS_PER_PAGE, (i + 1) * ROOMS_PER_PAGE);
-                roomPages.push(pageRooms);
+            let currentRoomList = [...rooms];
+            let rPageIndex = 0;
+
+            while (currentRoomList.length > 0 || rPageIndex === 0) {
+                const limit = rPageIndex === 0 ? FIRST_PAGE_ROOMS : OTHER_PAGE_ROOMS;
+                const pageData = currentRoomList.slice(0, limit);
+                currentRoomList = currentRoomList.slice(limit);
+                roomPages.push(pageData);
+                rPageIndex++;
             }
+            const totalRoomPages = roomPages.length;
 
             const handleCopyLink = () => {
                 const codeToCopy = commonHeader.eventCode || generateEventCode();
@@ -1201,14 +1214,14 @@
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="flex justify-between items-end w-full box-border mb-3">
-                                                <div className="text-red-500 font-black italic bg-red-50 px-3 py-1 border border-red-200" style={{ fontSize: `${Math.max(9, docFontSize - 1)}pt` }}>여권 만료일 6개월 확인필</div>
+                                            <div className="flex justify-end items-end w-full box-border mb-3">
+                                                {/* [수정] 2페이지부터는 "여권 만료일 6개월 확인필" 경고 제거로 심플하게 유지 */}
                                                 {totalTravelerPages > 1 && <div className="text-slate-500 font-bold" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>Page {page.pageIndex + 1} / {totalTravelerPages}</div>}
                                             </div>
                                         )}
 
                                         <div className="table-wrapper w-full relative flex-1 box-border flex flex-col">
-                                            {/* [수정] 테이블이 자신의 내용만큼만 차지하도록 변경 */}
+                                            {/* [수정] 남는 공간에 빈칸 그리지 않고, 내용만큼만 표가 깔끔하게 그려지도록 변경 */}
                                             <table className="w-full border-collapse min-w-full print:min-w-0 border-b-[3px] print:border-b-2 border-slate-800" style={{ fontSize: `${docFontSize}pt`, tableLayout: 'fixed' }}>
                                                 <colgroup>
                                                     <col className="no-print w-[3%]" />
@@ -1240,7 +1253,9 @@
                                                 </thead>
                                                 <tbody className="print:table-row-group text-slate-800">
                                                     {page.data.map((t, localIdx) => {
-                                                        const actualIdx = (page.pageIndex * TRAVELER_ROWS_PER_PAGE) + localIdx + 1;
+                                                        // [핵심 변경] 페이지별 행 개수(23개, 27개)가 다르므로 순번 계산 로직 업데이트
+                                                        const baseIdx = page.pageIndex === 0 ? 0 : FIRST_PAGE_TRAVELER_ROWS + (page.pageIndex - 1) * OTHER_PAGE_TRAVELER_ROWS;
+                                                        const actualIdx = baseIdx + localIdx + 1;
                                                         const status = getExpiryStatus(t.expiry);
                                                         const globalIdx = actualIdx - 1; 
                                                         
@@ -1379,7 +1394,6 @@
                                     {roomPages.map((pageRooms, pageIndex) => {
                                         const leftTableRooms = pageRooms.slice(0, Math.ceil(pageRooms.length / 2));
                                         const rightTableRooms = pageRooms.slice(Math.ceil(pageRooms.length / 2));
-                                        const pageStartIndex = pageIndex * ROOMS_PER_PAGE;
 
                                         return (
                                             <div key={pageIndex} className={`print-page box-border overflow-hidden bg-white shadow-xl p-3 sm:p-5 md:p-8 border-t-[4px] md:border-t-[6px] border-slate-800 print:shadow-none print:p-0 print:border-none print:m-0 relative flex flex-col justify-between`} style={{ fontSize: `${docFontSize}pt` }}>
@@ -1445,13 +1459,14 @@
                                                                 </div>
                                                             </div>
 
-                                                            {/* [수정] 데이터가 있는 만큼만 렌더링하도록 변경 */}
+                                                            {/* [핵심 변경] 빈칸 그리지 않고 실 데이터만큼만 렌더링, 페이지 시작 인덱스 유동 계산 */}
                                                             <div className="flex flex-col w-full box-border">
                                                                 {Array.from({ length: leftTableRooms.length }).map((_, i) => {
                                                                     const leftRoom = leftTableRooms[i];
                                                                     const rightRoom = rightTableRooms[i];
                                                                     const leftGlobalIdx = rooms.findIndex(r => r.id === leftRoom.id);
                                                                     const rightGlobalIdx = rightRoom ? rooms.findIndex(r => r.id === rightRoom.id) : -1;
+                                                                    const pageStartIndex = pageIndex === 0 ? 0 : FIRST_PAGE_ROOMS + (pageIndex - 1) * OTHER_PAGE_ROOMS;
 
                                                                     return (
                                                                         <div key={i} className="room-row-wrapper flex flex-col md:flex-row print:flex-row w-full items-stretch bg-white box-border">
