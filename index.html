@@ -46,34 +46,41 @@
             body { background-color: white !important; padding: 0 !important; margin: 0 !important; overflow-x: visible !important; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box !important; }
             
-            /* A4 용지에 꽉 차게 여백 6mm 적용 */
-            @page { size: A4 portrait; margin: 6mm 8mm; } 
+            /* A4 용지에 꽉 차게 여백 8mm 적용 */
+            @page { size: A4 portrait; margin: 8mm; } 
+            
             .print-page { 
                 box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; 
-                page-break-after: always; break-inside: avoid !important; 
+                page-break-after: always; page-break-inside: avoid !important; 
                 display: flex !important; flex-direction: column !important; justify-content: space-between !important;
                 
-                /* [파인튜닝] 하단 공백 제거를 위해 A4 가용 영역(약 282mm) 높이 강제 고정 */
-                min-height: 282mm !important; 
-                height: 282mm !important; 
+                /* [파인튜닝] 브라우저 누적 오차 방지 및 꽉 찬 레이아웃을 위한 272mm 절대 고정 */
+                min-height: 272mm !important; 
+                height: 272mm !important; 
+                max-height: 272mm !important; 
                 width: 100% !important; max-width: 100% !important; 
                 overflow: hidden !important; position: relative;
+                box-sizing: border-box !important;
             }
-            .print-page:last-child { page-break-after: auto; }
+            .print-page:last-child { page-break-after: auto !important; }
             
             table { border-collapse: collapse !important; width: 100% !important; max-width: 100% !important; table-layout: fixed !important; height: 100% !important;}
             thead { display: table-header-group; }
             tbody { display: table-row-group; }
-            /* 행 높이를 동일하게 분배하여 꽉 차게 */
             tr { page-break-inside: avoid; }
-            .fixed-row-height { height: 1px !important; } 
             
-            th, td { border: none !important; border-bottom: 1px solid #cbd5e1 !important; padding: 3px 2px !important; word-wrap: break-word !important; word-break: keep-all !important; vertical-align: middle;}
+            /* 행 높이를 동일하게 분배하여 꽉 차게 */
+            .fixed-row-height { height: auto !important; } 
+            
+            th, td { border: none !important; border-bottom: 1px solid #cbd5e1 !important; padding: 2.5px 2px !important; word-wrap: break-word !important; word-break: keep-all !important; vertical-align: middle;}
             th { border-top: 2px solid #1e293b !important; border-bottom: 2px solid #1e293b !important; color: #1e293b !important; }
             
             .print-footer { margin-top: auto !important; page-break-inside: avoid; width: 100%; padding-top: 5px !important; background: white !important; flex-shrink: 0;}
-            .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; display: flex !important; flex-direction: column !important; }
-            .room-row { padding: 0 !important; break-inside: avoid; }
+            .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; display: flex !important; flex-direction: column !important; height: 100% !important; }
+            
+            .room-row-wrapper { flex: 1 !important; display: flex !important; align-items: stretch !important; break-inside: avoid; }
+            .room-row { padding: 0 !important; break-inside: avoid; flex: 1 !important; display: flex !important; align-items: stretch !important; border-bottom: 1px solid #cbd5e1 !important; }
+            
             input, select, textarea { border: none !important; background: transparent !important; appearance: none; -webkit-appearance: none; color: #1e293b !important; }
             input::placeholder, textarea::placeholder { color: transparent !important; }
             
@@ -185,54 +192,69 @@
             />
         );
 
-        const RoomRow = ({ room, actualIdx, globalIdx, updateRoom, updateGuest, changeRoomType, removeRoom, dragRoomStart, dragRoomEnter, dragRoomEnd, dropRoom, fontSize, isInternationalRooming, isSharedMode }) => (
-            <div
-                className="room-row room-grid group relative bg-white w-full h-full border-b border-slate-300 last:border-b-0 print:border-b box-border print:py-0"
-                style={{ breakInside: 'avoid' }}
-                draggable={!isSharedMode}
-                onDragStart={!isSharedMode ? (e) => dragRoomStart(e, globalIdx) : undefined}
-                onDragEnter={!isSharedMode ? (e) => dragRoomEnter(e, globalIdx) : undefined}
-                onDragEnd={!isSharedMode ? dragRoomEnd : undefined}
-                onDrop={!isSharedMode ? dropRoom : undefined}
-                onDragOver={!isSharedMode ? (e) => e.preventDefault() : undefined}
-            >
-                <div className={`no-print flex items-center justify-center border-r border-slate-200 text-slate-300 ${!isSharedMode ? 'hover:text-blue-500 drag-handle' : ''}`} title={!isSharedMode ? "드래그하여 방 순서 변경" : ""}>
-                    <i className="fas fa-bars"></i>
-                </div>
+        const RoomRow = ({ room, actualIdx, globalIdx, updateRoom, updateGuest, changeRoomType, removeRoom, dragRoomStart, dragRoomEnter, dragRoomEnd, dropRoom, fontSize, isInternationalRooming, isSharedMode }) => {
+            // [파인튜닝] 더미(빈) 행 렌더링 로직 추가 (테이블 레이아웃 고정용)
+            if (room.isEmpty) {
+                return (
+                    <div className="room-row room-grid bg-white w-full h-full border-b border-slate-300 last:border-b-0 print:border-b box-border">
+                        <div className="no-print border-r border-slate-200"></div>
+                        <div className="border-r border-slate-200"></div>
+                        <div className="border-r border-slate-200"></div>
+                        <div className="border-r border-slate-200"></div>
+                        <div></div>
+                    </div>
+                );
+            }
 
-                <div className="flex items-center justify-center border-r border-slate-200 py-1 print:py-0.5 bg-slate-50">
-                    <span className="font-bold text-slate-700 text-center" style={{ fontSize: `${fontSize}pt` }}>{actualIdx}</span>
-                </div>
+            return (
+                <div
+                    className="room-row room-grid group relative bg-white w-full h-full border-b border-slate-300 last:border-b-0 print:border-b box-border print:py-0"
+                    style={{ breakInside: 'avoid' }}
+                    draggable={!isSharedMode}
+                    onDragStart={!isSharedMode ? (e) => dragRoomStart(e, globalIdx) : undefined}
+                    onDragEnter={!isSharedMode ? (e) => dragRoomEnter(e, globalIdx) : undefined}
+                    onDragEnd={!isSharedMode ? dragRoomEnd : undefined}
+                    onDrop={!isSharedMode ? dropRoom : undefined}
+                    onDragOver={!isSharedMode ? (e) => e.preventDefault() : undefined}
+                >
+                    <div className={`no-print flex items-center justify-center border-r border-slate-200 text-slate-300 ${!isSharedMode ? 'hover:text-blue-500 drag-handle' : ''}`} title={!isSharedMode ? "드래그하여 방 순서 변경" : ""}>
+                        <i className="fas fa-bars"></i>
+                    </div>
 
-                <div className="flex items-center justify-center border-r border-slate-200 py-1 print:py-0.5 px-1">
-                    <select className="font-bold text-slate-600 bg-transparent outline-none cursor-pointer w-full text-center" style={{ fontSize: `${Math.max(8, fontSize - 1)}pt` }} value={room.type} onChange={(e) => changeRoomType(globalIdx, e.target.value)}>
-                        <option value="TWIN">TWN</option><option value="TRIPLE">TRP</option><option value="SINGLE">SGL</option><option value="QUAD">QUAD</option>
-                    </select>
-                </div>
+                    <div className="flex items-center justify-center border-r border-slate-200 py-1 print:py-0.5 bg-slate-50">
+                        <span className="font-bold text-slate-700 text-center" style={{ fontSize: `${fontSize}pt` }}>{actualIdx}</span>
+                    </div>
 
-                <div className="flex flex-col py-0.5 print:py-0 bg-white min-w-0 border-r border-slate-200 justify-center">
-                    {room.guests.map((g, gIdx) => (
-                        <div key={gIdx} className={`flex flex-col px-1.5 md:px-2 py-1 print:py-0.5 ${gIdx > 0 ? 'border-t border-dashed border-slate-200' : ''}`}>
-                            <div className="flex items-center gap-1 md:gap-2 w-full">
-                                <input className="font-bold outline-none bg-transparent focus:text-blue-600" style={{ fontSize: `${fontSize}pt`, width: `${Math.max(70, fontSize * 6)}px` }} value={g.name} placeholder="이름" onChange={(e) => updateGuest(globalIdx, gIdx, 'name', e.target.value)} />
-                                <button type="button" onClick={() => updateGuest(globalIdx, gIdx, 'gender', g.gender === '남' ? '여' : '남')} className={`flex-shrink-0 font-bold px-1.5 py-0.5 rounded cursor-pointer ${g.gender === '여' ? 'bg-pink-50 text-pink-600' : 'bg-blue-50 text-blue-600'}`} style={{ fontSize: `${Math.max(8, fontSize - 2)}pt`, minWidth: '26px' }}>
-                                    {g.gender}
-                                </button>
-                                <input className="flex-1 min-w-[20px] text-slate-500 outline-none bg-transparent" style={{ fontSize: `${Math.max(9, fontSize - 1)}pt` }} placeholder={isSharedMode ? "(비고 입력)" : ""} value={g.remark} onChange={(e) => updateGuest(globalIdx, gIdx, 'remark', e.target.value)} />
+                    <div className="flex items-center justify-center border-r border-slate-200 py-1 print:py-0.5 px-1">
+                        <select className="font-bold text-slate-600 bg-transparent outline-none cursor-pointer w-full text-center" style={{ fontSize: `${Math.max(8, fontSize - 1)}pt` }} value={room.type} onChange={(e) => changeRoomType(globalIdx, e.target.value)}>
+                            <option value="TWIN">TWN</option><option value="TRIPLE">TRP</option><option value="SINGLE">SGL</option><option value="QUAD">QUAD</option>
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col py-0.5 print:py-0 bg-white min-w-0 border-r border-slate-200 justify-center">
+                        {room.guests.map((g, gIdx) => (
+                            <div key={gIdx} className={`flex flex-col px-1.5 md:px-2 py-1 print:py-0.5 ${gIdx > 0 ? 'border-t border-dashed border-slate-200' : ''}`}>
+                                <div className="flex items-center gap-1 md:gap-2 w-full">
+                                    <input className="font-bold outline-none bg-transparent focus:text-blue-600" style={{ fontSize: `${fontSize}pt`, width: `${Math.max(70, fontSize * 6)}px` }} value={g.name} placeholder="이름" onChange={(e) => updateGuest(globalIdx, gIdx, 'name', e.target.value)} />
+                                    <button type="button" onClick={() => updateGuest(globalIdx, gIdx, 'gender', g.gender === '남' ? '여' : '남')} className={`flex-shrink-0 font-bold px-1.5 py-0.5 rounded cursor-pointer ${g.gender === '여' ? 'bg-pink-50 text-pink-600' : 'bg-blue-50 text-blue-600'}`} style={{ fontSize: `${Math.max(8, fontSize - 2)}pt`, minWidth: '26px' }}>
+                                        {g.gender}
+                                    </button>
+                                    <input className="flex-1 min-w-[20px] text-slate-500 outline-none bg-transparent" style={{ fontSize: `${Math.max(9, fontSize - 1)}pt` }} placeholder={isSharedMode ? "(비고 입력)" : ""} value={g.remark} onChange={(e) => updateGuest(globalIdx, gIdx, 'remark', e.target.value)} />
+                                </div>
+                                {isInternationalRooming && (
+                                    <input className="font-bold tracking-wide text-slate-500 outline-none uppercase bg-transparent w-full mt-0.5 print:mt-0" style={{ fontSize: `${Math.max(8, fontSize - 1.5)}pt` }} placeholder="ENGLISH NAME" value={g.engName} onChange={(e) => updateGuest(globalIdx, gIdx, 'engName', e.target.value)} />
+                                )}
                             </div>
-                            {isInternationalRooming && (
-                                <input className="font-bold tracking-wide text-slate-500 outline-none uppercase bg-transparent w-full mt-0.5 print:mt-0" style={{ fontSize: `${Math.max(8, fontSize - 1.5)}pt` }} placeholder="ENGLISH NAME" value={g.engName} onChange={(e) => updateGuest(globalIdx, gIdx, 'engName', e.target.value)} />
-                            )}
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
 
-                <div className="flex items-center justify-center p-1 print:p-0 bg-white min-w-0 relative">
-                    <input className="w-full text-center font-bold text-slate-600 bg-transparent outline-none" style={{ fontSize: `${fontSize}pt` }} placeholder="추후 배정" value={room.roomNo} onChange={(e) => updateRoom(globalIdx, 'roomNo', e.target.value)} />
-                    <button type="button" onClick={() => removeRoom(globalIdx)} className="no-print absolute -right-3 top-1/2 -translate-y-1/2 p-1.5 bg-white border border-slate-200 rounded-full text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 z-10 shadow-sm"><i className="fas fa-trash-alt" style={{ fontSize: `${Math.max(8, fontSize - 2)}pt` }}></i></button>
+                    <div className="flex items-center justify-center p-1 print:p-0 bg-white min-w-0 relative">
+                        <input className="w-full text-center font-bold text-slate-600 bg-transparent outline-none" style={{ fontSize: `${fontSize}pt` }} placeholder="추후 배정" value={room.roomNo} onChange={(e) => updateRoom(globalIdx, 'roomNo', e.target.value)} />
+                        <button type="button" onClick={() => removeRoom(globalIdx)} className="no-print absolute -right-3 top-1/2 -translate-y-1/2 p-1.5 bg-white border border-slate-200 rounded-full text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 z-10 shadow-sm"><i className="fas fa-trash-alt" style={{ fontSize: `${Math.max(8, fontSize - 2)}pt` }}></i></button>
+                    </div>
                 </div>
-            </div>
-        );
+            );
+        };
 
         // 메인 컴포넌트
         const App = () => {
@@ -485,12 +507,19 @@
                 }));
             };
 
-            // [파인튜닝] 하단 꽉 차게 26명으로 확대
+            // [파인튜닝] 하단 공백 제거를 위해 한 페이지당 26명으로 상향 & 더미 빈칸(Dummy Row) 자동 생성 로직 추가
             const TRAVELER_ROWS_PER_PAGE = 26; 
             const travelerPages = [];
             const totalTravelerPages = Math.max(1, Math.ceil(travelers.length / TRAVELER_ROWS_PER_PAGE));
             for (let i = 0; i < totalTravelerPages; i++) {
-                travelerPages.push({ pageIndex: i, data: travelers.slice(i * TRAVELER_ROWS_PER_PAGE, (i + 1) * TRAVELER_ROWS_PER_PAGE) });
+                const pageData = travelers.slice(i * TRAVELER_ROWS_PER_PAGE, (i + 1) * TRAVELER_ROWS_PER_PAGE);
+                
+                // 브라우저의 누적 오버플로우 방지 및 동일 레이아웃 고정을 위해 빈 행(Dummy) 삽입
+                while (pageData.length < TRAVELER_ROWS_PER_PAGE) {
+                    pageData.push({ id: `empty-${i}-${pageData.length}`, isEmpty: true });
+                }
+                
+                travelerPages.push({ pageIndex: i, data: pageData });
             }
 
             // [여행자 엑셀 처리 로직]
@@ -530,14 +559,11 @@
                         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                         const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
 
-                        // [개선] 엑셀 날짜 처리 고도화
                         const parseExcelDate = (cellVal) => {
                             if (cellVal === undefined || cellVal === null || cellVal === "") return "";
                             
-                            // 엑셀 숫자 타입인 경우 (날짜 일련번호 또는 그냥 숫자형식)
                             if (typeof cellVal === 'number') {
                                 if (cellVal > 10000 && cellVal < 60000) { 
-                                    // Excel Date Serial Number 변환
                                     const date_info = new Date(Math.round((cellVal - 25569) * 86400 * 1000));
                                     return `${date_info.getUTCFullYear()}-${String(date_info.getUTCMonth() + 1).padStart(2, '0')}-${String(date_info.getUTCDate()).padStart(2, '0')}`;
                                 }
@@ -553,22 +579,18 @@
                                 return numStr;
                             }
                             
-                            // 문자열인 경우
                             let strVal = String(cellVal).trim();
                             const cleanStr = strVal.replace(/[\s\.\/,-]/g, '');
                             
-                            // 8자리 YYYYMMDD 체크
                             if (/^\d{8}$/.test(cleanStr)) {
                                 return `${cleanStr.substring(0,4)}-${cleanStr.substring(4,6)}-${cleanStr.substring(6,8)}`;
                             }
-                            // 6자리 YYMMDD 체크
                             if (/^\d{6}$/.test(cleanStr)) {
                                 let y = parseInt(cleanStr.substring(0, 2), 10);
                                 y += (y > 50 ? 1900 : 2000);
                                 return `${y}-${cleanStr.substring(2, 4)}-${cleanStr.substring(4, 6)}`;
                             }
                             
-                            // 정규화된 형태의 매칭 (오타 포함)
                             strVal = strVal.replace(/[\.\/,\s]+/g, '-').replace(/-+$/, '');
                             const stdMatch = strVal.match(/^(\d{2,4})-(\d{1,2})-(\d{1,2})$/);
                             if (stdMatch) {
@@ -577,14 +599,12 @@
                                 return `${y}-${String(stdMatch[2]).padStart(2, '0')}-${String(stdMatch[3]).padStart(2, '0')}`;
                             }
                             
-                            // 오타 등으로 정규화가 불가능한 값은 원본 유지
                             return strVal;
                         };
 
                         const newTravelers = [];
                         for (let i = 1; i < json.length; i++) {
                             const row = json[i];
-                            // 헤더가 있는 1번 인덱스를 이름 컬럼으로 추정. 비어있으면 패스
                             if (!row || row.length === 0 || !row[1] || String(row[1]).trim() === '') continue;
                             const rawGender = row[4] ? String(row[4]).toUpperCase().trim() : '';
                             newTravelers.push({
@@ -649,7 +669,7 @@
                         let s = R === 0 ? { ...headerStyle } : { ...dataStyleCenter };
                         
                         if (R === emptyRowIdx || R === logoRowIdx) {
-                            s.border = {}; // 푸터 영역 테두리 제거
+                            s.border = {}; 
                             if (R === logoRowIdx && C === 5) s = { ...logoStyle };
                         } else {
                             s.border = { left: { style: "thin", color: { rgb: "CBD5E1" } }, right: { style: "thin", color: { rgb: "CBD5E1" } } };
@@ -955,11 +975,20 @@
             const removeRoom = (globalIdx) => setRooms(prev => prev.filter((_, idx) => idx !== globalIdx));
             const addRoom = () => setRooms(prev => [...prev, { id: Date.now() + Math.random(), roomNo: '', type: 'TWIN', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }]);
 
-            // [파인튜닝] 하단 꽉 차게 방배정 개수 확대 (국내 28실 / 해외 20실)
+            // [파인튜닝] 하단 꽉 차게 방배정 개수 상향 (국내 28실 / 해외 20실) & 더미(Dummy) 방 생성으로 100% 동일 레이아웃 고정
             const ROOMS_PER_PAGE = isInternationalRooming ? 20 : 28; 
             const roomPages = [];
             const totalRoomPages = Math.max(1, Math.ceil(rooms.length / ROOMS_PER_PAGE));
-            for (let i = 0; i < totalRoomPages; i++) roomPages.push(rooms.slice(i * ROOMS_PER_PAGE, (i + 1) * ROOMS_PER_PAGE));
+            for (let i = 0; i < totalRoomPages; i++) {
+                const pageRooms = rooms.slice(i * ROOMS_PER_PAGE, (i + 1) * ROOMS_PER_PAGE);
+                
+                // 브라우저 렌더링 버그(높이 늘어남) 방지용 빈칸 데이터 강제 삽입
+                while (pageRooms.length < ROOMS_PER_PAGE) {
+                    pageRooms.push({ id: `empty-room-${i}-${pageRooms.length}`, isEmpty: true });
+                }
+                
+                roomPages.push(pageRooms);
+            }
 
             const handleCopyLink = () => {
                 const codeToCopy = commonHeader.eventCode || generateEventCode();
@@ -1022,7 +1051,7 @@
                         groupName: commonHeader.groupName || '미지정 단체',
                         submitterName: submitterName,
                         submittedAt: new Date().toISOString(),
-                        rooms: rooms,
+                        rooms: rooms, // DB에는 실제 방 정보만 저장 (빈 방은 제외)
                         stats: roomStats,
                         privacyAgreed: true,
                         privacyAgreedAt: new Date().toISOString(),
@@ -1046,7 +1075,8 @@
                     message: `해당 배정본(${submission.submitterName} 제출)을 현재 화면에 덮어씌웁니다.\n기존 화면에 작성 중이던 내용은 사라집니다. 계속하시겠습니까?`,
                     inputValue: '',
                     onConfirm: () => {
-                        setRooms(submission.rooms);
+                        const validRooms = submission.rooms.filter(r => !r.isEmpty); // 빈방 제거 후 적용
+                        setRooms(validRooms.length > 0 ? validRooms : [{ id: 1, type: 'TWIN', roomNo: '', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }]);
                         setActiveMainTab('rooming');
                         setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null, onChange: null }); 
                         showAlert("✅ 성공적으로 배정본이 적용되었습니다!");
@@ -1234,8 +1264,29 @@
                                                 <tbody className="print:table-row-group text-slate-800 h-full">
                                                     {page.data.map((t, localIdx) => {
                                                         const actualIdx = (page.pageIndex * TRAVELER_ROWS_PER_PAGE) + localIdx + 1;
+                                                        
+                                                        // 더미 행 렌더링 (틀 유지)
+                                                        if (t.isEmpty) {
+                                                            return (
+                                                                <tr key={t.id} className="border-b border-slate-200 bg-white fixed-row-height">
+                                                                    <td className="no-print"></td>
+                                                                    <td></td>
+                                                                    <td className="border-r border-slate-200"></td>
+                                                                    <td className="border-r border-slate-200"></td>
+                                                                    <td className="border-r border-slate-200"></td>
+                                                                    <td className="border-r border-slate-200"></td>
+                                                                    <td className="border-r border-slate-200"></td>
+                                                                    <td className="border-r border-slate-200"></td>
+                                                                    <td className="border-r border-slate-200"></td>
+                                                                    <td></td>
+                                                                    <td className="no-print"></td>
+                                                                </tr>
+                                                            );
+                                                        }
+
                                                         const status = getExpiryStatus(t.expiry);
                                                         const globalIdx = actualIdx - 1; 
+                                                        
                                                         return (
                                                             <tr key={t.id} className="border-b border-slate-200 hover:bg-slate-50 transition group bg-white fixed-row-height" draggable onDragStart={(e) => dragStart(e, globalIdx)} onDragEnter={(e) => dragEnter(e, globalIdx)} onDragEnd={dragEnd} onDrop={drop} onDragOver={(e) => e.preventDefault()}>
                                                                 <td className="no-print text-center text-slate-300 hover:text-blue-500 drag-handle"><i className="fas fa-bars"></i></td>
@@ -1375,7 +1426,7 @@
 
                                         return (
                                             <div key={pageIndex} className={`print-page box-border overflow-hidden bg-white shadow-xl p-3 sm:p-5 md:p-8 border-t-[4px] md:border-t-[6px] border-slate-800 print:shadow-none print:p-0 print:border-none print:m-0 relative flex flex-col justify-between`} style={{ fontSize: `${docFontSize}pt` }}>
-                                                <div className="flex-1 flex flex-col w-full box-border">
+                                                <div className="flex-1 flex flex-col w-full box-border h-full">
                                                     
                                                     {/* 3. 룸 리스트 헤더 (1페이지만 표시) */}
                                                     {pageIndex === 0 ? (
@@ -1417,8 +1468,8 @@
                                                         {isInternationalRooming && !isSharedMode ? <p className="font-bold text-red-600 no-print" style={{ fontSize: `${Math.max(9, docFontSize - 1)}pt` }}><i className="fas fa-exclamation-circle mr-1"></i> 자동 변환된 영문명은 여권과 상이할 수 있습니다. 꼭 재확인 바랍니다.</p> : <div></div>}
                                                     </div>
 
-                                                    <div className="table-wrapper flex-1 w-full relative box-border overflow-hidden">
-                                                        <div className="w-full h-full border-t-[2px] border-slate-800 border-b-[3px] border-slate-800 print:border-b-2 flex flex-col bg-white box-border">
+                                                    <div className="table-wrapper flex-1 w-full relative box-border overflow-hidden flex flex-col">
+                                                        <div className="w-full h-full border-t-[2px] border-slate-800 border-b-[3px] border-slate-800 print:border-b-2 flex flex-col bg-white box-border flex-1">
                                                             
                                                             <div className="flex flex-col md:flex-row print:flex-row items-stretch w-full border-b-[2px] border-slate-800 text-slate-800 font-bold bg-slate-50 box-border flex-shrink-0" style={{ fontSize: `${Math.max(8, docFontSize - 1)}pt` }}>
                                                                 <div className="room-grid text-center items-stretch w-full md:w-1/2 print:w-1/2 md:border-r-[2px] print:border-r-[2px] border-slate-800 box-border">
@@ -1441,19 +1492,19 @@
                                                                 {Array.from({ length: leftTableRooms.length }).map((_, i) => {
                                                                     const leftRoom = leftTableRooms[i];
                                                                     const rightRoom = rightTableRooms[i];
-                                                                    const leftGlobalIdx = rooms.findIndex(r => r.id === leftRoom.id);
-                                                                    const rightGlobalIdx = rightRoom ? rooms.findIndex(r => r.id === rightRoom.id) : -1;
+                                                                    const leftGlobalIdx = leftRoom && !leftRoom.isEmpty ? rooms.findIndex(r => r.id === leftRoom.id) : -1;
+                                                                    const rightGlobalIdx = rightRoom && !rightRoom.isEmpty ? rooms.findIndex(r => r.id === rightRoom.id) : -1;
 
                                                                     return (
-                                                                        <div key={i} className="flex flex-col md:flex-row print:flex-row w-full flex-1 items-stretch bg-white box-border">
+                                                                        <div key={i} className="room-row-wrapper flex flex-col md:flex-row print:flex-row w-full items-stretch bg-white box-border">
                                                                             <div className="w-full md:w-1/2 print:w-1/2 md:border-r-[2px] print:border-r-[2px] border-slate-800 flex box-border">
-                                                                                <RoomRow room={leftRoom} actualIdx={pageStartIndex + i + 1} globalIdx={leftGlobalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} isSharedMode={isSharedMode} />
+                                                                                {leftRoom ? <RoomRow room={leftRoom} actualIdx={leftRoom.isEmpty ? "" : (pageStartIndex + i + 1)} globalIdx={leftGlobalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} isSharedMode={isSharedMode} /> : <div className="w-full h-full box-border"></div>}
                                                                             </div>
                                                                             <div className="w-full md:w-1/2 print:w-1/2 flex border-b md:border-b-0 print:border-b-0 border-slate-300 box-border">
                                                                                 {rightRoom ? (
-                                                                                    <RoomRow room={rightRoom} actualIdx={pageStartIndex + leftTableRooms.length + i + 1} globalIdx={rightGlobalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} isSharedMode={isSharedMode}/>
+                                                                                    <RoomRow room={rightRoom} actualIdx={rightRoom.isEmpty ? "" : (pageStartIndex + leftTableRooms.length + i + 1)} globalIdx={rightGlobalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} isSharedMode={isSharedMode}/>
                                                                                 ) : (
-                                                                                    <div className="w-full h-full bg-white border-b border-slate-300 last:border-b-0 print:border-b box-border"></div>
+                                                                                    <div className="w-full h-full bg-white box-border border-b border-slate-300 last:border-b-0 print:border-b"></div>
                                                                                 )}
                                                                             </div>
                                                                         </div>
