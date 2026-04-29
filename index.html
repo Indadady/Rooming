@@ -46,34 +46,38 @@
             body { background-color: white !important; padding: 0 !important; margin: 0 !important; overflow-x: visible !important; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box !important; }
             
-            /* [개선] A4 용지에 꽉 차게 여백 6mm 적용 */
+            /* A4 용지에 꽉 차게 여백 6mm 적용 */
             @page { size: A4 portrait; margin: 6mm 8mm; } 
             .print-page { 
                 box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; 
                 page-break-after: always; break-inside: avoid !important; 
                 display: flex !important; flex-direction: column !important; justify-content: space-between !important;
                 
-                /* [개선] 데이터 증발 원인인 overflow: hidden 제거, 동적 높이 허용 */
-                min-height: 275mm !important; 
-                height: auto !important; 
+                /* [파인튜닝] 하단 공백 제거를 위해 A4 가용 영역(약 282mm) 높이 강제 고정 */
+                min-height: 282mm !important; 
+                height: 282mm !important; 
                 width: 100% !important; max-width: 100% !important; 
-                overflow: visible !important; position: relative;
+                overflow: hidden !important; position: relative;
             }
             .print-page:last-child { page-break-after: auto; }
-            table { border-collapse: collapse !important; width: 100% !important; max-width: 100% !important; table-layout: fixed !important; }
-            thead { display: table-header-group; }
-            tr { page-break-inside: avoid; }
             
-            th, td { border: none !important; border-bottom: 1px solid #cbd5e1 !important; padding: 4px 2px !important; word-wrap: break-word !important; word-break: keep-all !important; }
+            table { border-collapse: collapse !important; width: 100% !important; max-width: 100% !important; table-layout: fixed !important; height: 100% !important;}
+            thead { display: table-header-group; }
+            tbody { display: table-row-group; }
+            /* 행 높이를 동일하게 분배하여 꽉 차게 */
+            tr { page-break-inside: avoid; }
+            .fixed-row-height { height: 1px !important; } 
+            
+            th, td { border: none !important; border-bottom: 1px solid #cbd5e1 !important; padding: 3px 2px !important; word-wrap: break-word !important; word-break: keep-all !important; vertical-align: middle;}
             th { border-top: 2px solid #1e293b !important; border-bottom: 2px solid #1e293b !important; color: #1e293b !important; }
             
-            .print-footer { margin-top: auto !important; page-break-inside: avoid; width: 100%; padding-top: 10px !important; background: white !important; }
+            .print-footer { margin-top: auto !important; page-break-inside: avoid; width: 100%; padding-top: 5px !important; background: white !important; flex-shrink: 0;}
             .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; display: flex !important; flex-direction: column !important; }
             .room-row { padding: 0 !important; break-inside: avoid; }
             input, select, textarea { border: none !important; background: transparent !important; appearance: none; -webkit-appearance: none; color: #1e293b !important; }
             input::placeholder, textarea::placeholder { color: transparent !important; }
             
-            /* [개선] 인쇄 시 그리드 비율 완벽 고정 (찌그러짐 방지) */
+            /* 인쇄 시 그리드 비율 완벽 고정 */
             .room-grid { grid-template-columns: 8% 12% 62% 18% !important; }
         }
 
@@ -85,7 +89,7 @@
         .editable-cell-input:hover { background-color: #f1f5f9; cursor: text; border-radius: 4px; overflow: visible; }
         .editable-cell-input:focus { background-color: #e0f2fe; border-bottom: 2px solid #3b82f6; outline: none; overflow: visible; }
 
-        .table-wrapper { overflow-x: auto; width: 100%; padding-bottom: 15px; -webkit-overflow-scrolling: touch; }
+        .table-wrapper { overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         ::-webkit-scrollbar { height: 6px; width: 8px; }
@@ -93,9 +97,9 @@
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
-        .fixed-row-height { height: 36px; } 
+        .fixed-row-height { height: 34px; } 
 
-        /* [개선] 웹 화면용 그리드 비율 고정 */
+        /* 웹 화면용 그리드 비율 고정 */
         .room-grid { display: grid; grid-template-columns: 35px 8% 12% 62% 18%; align-items: stretch; }
 
         .room-row input::placeholder { color: transparent !important; transition: color 0.2s ease-in-out; }
@@ -481,7 +485,8 @@
                 }));
             };
 
-            const TRAVELER_ROWS_PER_PAGE = 20; // 22에서 20으로 축소하여 여백 확보
+            // [파인튜닝] 하단 꽉 차게 26명으로 확대
+            const TRAVELER_ROWS_PER_PAGE = 26; 
             const travelerPages = [];
             const totalTravelerPages = Math.max(1, Math.ceil(travelers.length / TRAVELER_ROWS_PER_PAGE));
             for (let i = 0; i < totalTravelerPages; i++) {
@@ -525,42 +530,61 @@
                         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                         const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
 
+                        // [개선] 엑셀 날짜 처리 고도화
                         const parseExcelDate = (cellVal) => {
                             if (cellVal === undefined || cellVal === null || cellVal === "") return "";
+                            
+                            // 엑셀 숫자 타입인 경우 (날짜 일련번호 또는 그냥 숫자형식)
                             if (typeof cellVal === 'number') {
-                                const numStr = String(cellVal);
-                                if (numStr.length === 6 || (numStr.length === 5 && cellVal >= 10000 && cellVal <= 99999)) {
-                                    let padded = numStr.padStart(6, '0');
-                                    let y = parseInt(padded.substring(0, 2), 10);
-                                    y += (y > 50 ? 1900 : 2000);
-                                    return `${y}-${padded.substring(2, 4)}-${padded.substring(4, 6)}`;
-                                }
-                                if (cellVal > 10000 && cellVal < 60000) {
-                                    const date_info = new Date(Math.floor(cellVal - 25569) * 86400 * 1000);
+                                if (cellVal > 10000 && cellVal < 60000) { 
+                                    // Excel Date Serial Number 변환
+                                    const date_info = new Date(Math.round((cellVal - 25569) * 86400 * 1000));
                                     return `${date_info.getUTCFullYear()}-${String(date_info.getUTCMonth() + 1).padStart(2, '0')}-${String(date_info.getUTCDate()).padStart(2, '0')}`;
+                                }
+                                let numStr = String(cellVal).trim();
+                                if (/^\d{8}$/.test(numStr)) {
+                                    return `${numStr.substring(0,4)}-${numStr.substring(4,6)}-${numStr.substring(6,8)}`;
+                                }
+                                if (/^\d{6}$/.test(numStr)) {
+                                    let y = parseInt(numStr.substring(0, 2), 10);
+                                    y += (y > 50 ? 1900 : 2000);
+                                    return `${y}-${numStr.substring(2, 4)}-${numStr.substring(4, 6)}`;
                                 }
                                 return numStr;
                             }
+                            
+                            // 문자열인 경우
                             let strVal = String(cellVal).trim();
-                            if (strVal.replace(/\s/g, '').match(/^\d{6}$/)) {
-                                let clean = strVal.replace(/\s/g, '');
-                                let y = parseInt(clean.substring(0, 2), 10);
-                                y += (y > 50 ? 1900 : 2000);
-                                return `${y}-${clean.substring(2, 4)}-${clean.substring(4, 6)}`;
+                            const cleanStr = strVal.replace(/[\s\.\/,-]/g, '');
+                            
+                            // 8자리 YYYYMMDD 체크
+                            if (/^\d{8}$/.test(cleanStr)) {
+                                return `${cleanStr.substring(0,4)}-${cleanStr.substring(4,6)}-${cleanStr.substring(6,8)}`;
                             }
-                            strVal = strVal.replace(/\./g, '-').replace(/\//g, '-').replace(/,/g, '-').replace(/\s/g, '');
+                            // 6자리 YYMMDD 체크
+                            if (/^\d{6}$/.test(cleanStr)) {
+                                let y = parseInt(cleanStr.substring(0, 2), 10);
+                                y += (y > 50 ? 1900 : 2000);
+                                return `${y}-${cleanStr.substring(2, 4)}-${cleanStr.substring(4, 6)}`;
+                            }
+                            
+                            // 정규화된 형태의 매칭 (오타 포함)
+                            strVal = strVal.replace(/[\.\/,\s]+/g, '-').replace(/-+$/, '');
                             const stdMatch = strVal.match(/^(\d{2,4})-(\d{1,2})-(\d{1,2})$/);
                             if (stdMatch) {
                                 let y = parseInt(stdMatch[1], 10);
                                 if (y < 100) y += (y > 50 ? 1900 : 2000);
                                 return `${y}-${String(stdMatch[2]).padStart(2, '0')}-${String(stdMatch[3]).padStart(2, '0')}`;
                             }
+                            
+                            // 오타 등으로 정규화가 불가능한 값은 원본 유지
                             return strVal;
                         };
 
                         const newTravelers = [];
                         for (let i = 1; i < json.length; i++) {
                             const row = json[i];
+                            // 헤더가 있는 1번 인덱스를 이름 컬럼으로 추정. 비어있으면 패스
                             if (!row || row.length === 0 || !row[1] || String(row[1]).trim() === '') continue;
                             const rawGender = row[4] ? String(row[4]).toUpperCase().trim() : '';
                             newTravelers.push({
@@ -931,8 +955,8 @@
             const removeRoom = (globalIdx) => setRooms(prev => prev.filter((_, idx) => idx !== globalIdx));
             const addRoom = () => setRooms(prev => [...prev, { id: Date.now() + Math.random(), roomNo: '', type: 'TWIN', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }]);
 
-            // [개선] 영문명 유무에 따라 한 페이지당 안전한 방 개수를 자동 조절하여 인쇄 잘림 완벽 방지
-            const ROOMS_PER_PAGE = isInternationalRooming ? 16 : 24; 
+            // [파인튜닝] 하단 꽉 차게 방배정 개수 확대 (국내 28실 / 해외 20실)
+            const ROOMS_PER_PAGE = isInternationalRooming ? 20 : 28; 
             const roomPages = [];
             const totalRoomPages = Math.max(1, Math.ceil(rooms.length / ROOMS_PER_PAGE));
             for (let i = 0; i < totalRoomPages; i++) roomPages.push(rooms.slice(i * ROOMS_PER_PAGE, (i + 1) * ROOMS_PER_PAGE));
@@ -1150,7 +1174,7 @@
                             </div>
 
                             {travelerPages.map((page) => (
-                                <div key={page.pageIndex} className="print-page bg-white w-full max-w-full xl:max-w-[1400px] mx-auto shadow-xl p-3 sm:p-5 md:p-8 xl:px-12 flex flex-col justify-between border border-slate-200 mb-8 box-border" style={{ minHeight: '265mm' }}>
+                                <div key={page.pageIndex} className="print-page bg-white w-full max-w-full xl:max-w-[1400px] mx-auto shadow-xl p-3 sm:p-5 md:p-8 xl:px-12 flex flex-col justify-between border border-slate-200 mb-8 box-border">
                                     <div className="w-full flex-1 flex flex-col overflow-hidden">
                                         
                                         {/* 1. 여행자 명단 헤더 (1페이지만 표시) */}
@@ -1177,8 +1201,8 @@
                                             </div>
                                         )}
 
-                                        <div className="table-wrapper w-full relative flex-1 box-border">
-                                            <table className="w-full border-collapse min-w-full print:min-w-0 border-b-[3px] print:border-b-2 border-slate-800" style={{ fontSize: `${docFontSize}pt`, tableLayout: 'fixed' }}>
+                                        <div className="table-wrapper w-full relative flex-1 box-border flex flex-col">
+                                            <table className="w-full h-full border-collapse min-w-full print:min-w-0 border-b-[3px] print:border-b-2 border-slate-800 flex-1" style={{ fontSize: `${docFontSize}pt`, tableLayout: 'fixed' }}>
                                                 <colgroup>
                                                     <col className="no-print w-[3%]" />
                                                     <col className="w-[4%] print:w-[4%]" />
@@ -1193,21 +1217,21 @@
                                                     <col className="no-print w-[4%]" />
                                                 </colgroup>
                                                 <thead className="print:table-header-group">
-                                                    <tr className="text-slate-800 border-b-2 border-slate-800 bg-transparent">
-                                                        <th className="no-print text-center py-2"><i className="fas fa-sort text-slate-300"></i></th>
-                                                        <th className="text-center font-bold py-2 border-x-transparent">NO</th>
-                                                        <th className="text-center font-bold py-2 border-x-transparent">성명</th>
-                                                        <th className="text-left font-bold pl-2 py-2 border-x-transparent">NAME</th>
-                                                        <th className="text-center font-bold py-2 border-x-transparent">생년월일</th>
-                                                        <th className="text-center font-bold py-2 border-x-transparent">성별</th>
-                                                        <th className="text-center font-bold py-2 border-x-transparent">여권번호</th>
-                                                        <th className="text-center font-bold whitespace-nowrap py-2 border-x-transparent">만료일</th>
-                                                        <th className="text-center font-bold py-2 border-x-transparent">국적</th>
-                                                        <th className="text-left font-bold py-2 border-x-transparent">기타</th>
-                                                        <th className="no-print text-center font-bold py-2">삭제</th>
+                                                    <tr className="text-slate-800 border-b-2 border-slate-800 bg-transparent h-[34px]">
+                                                        <th className="no-print text-center py-1"><i className="fas fa-sort text-slate-300"></i></th>
+                                                        <th className="text-center font-bold py-1 border-x-transparent">NO</th>
+                                                        <th className="text-center font-bold py-1 border-x-transparent">성명</th>
+                                                        <th className="text-left font-bold pl-2 py-1 border-x-transparent">NAME</th>
+                                                        <th className="text-center font-bold py-1 border-x-transparent">생년월일</th>
+                                                        <th className="text-center font-bold py-1 border-x-transparent">성별</th>
+                                                        <th className="text-center font-bold py-1 border-x-transparent">여권번호</th>
+                                                        <th className="text-center font-bold whitespace-nowrap py-1 border-x-transparent">만료일</th>
+                                                        <th className="text-center font-bold py-1 border-x-transparent">국적</th>
+                                                        <th className="text-left font-bold py-1 border-x-transparent">기타</th>
+                                                        <th className="no-print text-center font-bold py-1">삭제</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody className="print:table-row-group text-slate-800">
+                                                <tbody className="print:table-row-group text-slate-800 h-full">
                                                     {page.data.map((t, localIdx) => {
                                                         const actualIdx = (page.pageIndex * TRAVELER_ROWS_PER_PAGE) + localIdx + 1;
                                                         const status = getExpiryStatus(t.expiry);
@@ -1242,8 +1266,8 @@
                                     
                                     {/* 2. 여행자 명단 푸터 (마지막 페이지만 표시) */}
                                     {page.pageIndex === totalTravelerPages - 1 && (
-                                        <div className="print-footer w-full mt-auto pt-8">
-                                            <div className="flex justify-between items-end border-t-[2px] border-slate-800 pt-4 pb-2 w-full">
+                                        <div className="print-footer w-full mt-auto pt-4">
+                                            <div className="flex justify-between items-end border-t-[2px] border-slate-800 pt-2 pb-1 w-full">
                                                 <div className="font-bold text-slate-500" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>
                                                     작성일: {new Date().toLocaleDateString()}
                                                 </div>
@@ -1350,7 +1374,7 @@
                                         const pageStartIndex = pageIndex * ROOMS_PER_PAGE;
 
                                         return (
-                                            <div key={pageIndex} className={`print-page box-border overflow-hidden bg-white shadow-xl p-3 sm:p-5 md:p-8 border-t-[4px] md:border-t-[6px] border-slate-800 print:shadow-none print:p-0 print:border-none print:m-0 relative flex flex-col justify-between`} style={{ minHeight: '275mm', fontSize: `${docFontSize}pt` }}>
+                                            <div key={pageIndex} className={`print-page box-border overflow-hidden bg-white shadow-xl p-3 sm:p-5 md:p-8 border-t-[4px] md:border-t-[6px] border-slate-800 print:shadow-none print:p-0 print:border-none print:m-0 relative flex flex-col justify-between`} style={{ fontSize: `${docFontSize}pt` }}>
                                                 <div className="flex-1 flex flex-col w-full box-border">
                                                     
                                                     {/* 3. 룸 리스트 헤더 (1페이지만 표시) */}
@@ -1394,9 +1418,9 @@
                                                     </div>
 
                                                     <div className="table-wrapper flex-1 w-full relative box-border overflow-hidden">
-                                                        <div className="w-full border-t-[2px] border-slate-800 border-b-[3px] border-slate-800 print:border-b-2 flex flex-col bg-white box-border">
+                                                        <div className="w-full h-full border-t-[2px] border-slate-800 border-b-[3px] border-slate-800 print:border-b-2 flex flex-col bg-white box-border">
                                                             
-                                                            <div className="flex flex-col md:flex-row print:flex-row items-stretch w-full border-b-[2px] border-slate-800 text-slate-800 font-bold bg-slate-50 box-border" style={{ fontSize: `${Math.max(8, docFontSize - 1)}pt` }}>
+                                                            <div className="flex flex-col md:flex-row print:flex-row items-stretch w-full border-b-[2px] border-slate-800 text-slate-800 font-bold bg-slate-50 box-border flex-shrink-0" style={{ fontSize: `${Math.max(8, docFontSize - 1)}pt` }}>
                                                                 <div className="room-grid text-center items-stretch w-full md:w-1/2 print:w-1/2 md:border-r-[2px] print:border-r-[2px] border-slate-800 box-border">
                                                                     <div className="no-print flex items-center justify-center py-2 border-r border-slate-200"><i className="fas fa-sort text-slate-300"></i></div>
                                                                     <div className="flex items-center justify-center py-2 border-r border-slate-200">NO</div>
@@ -1413,7 +1437,7 @@
                                                                 </div>
                                                             </div>
 
-                                                            <div className="flex flex-col w-full box-border">
+                                                            <div className="flex flex-col w-full flex-1 box-border">
                                                                 {Array.from({ length: leftTableRooms.length }).map((_, i) => {
                                                                     const leftRoom = leftTableRooms[i];
                                                                     const rightRoom = rightTableRooms[i];
@@ -1421,7 +1445,7 @@
                                                                     const rightGlobalIdx = rightRoom ? rooms.findIndex(r => r.id === rightRoom.id) : -1;
 
                                                                     return (
-                                                                        <div key={i} className="flex flex-col md:flex-row print:flex-row w-full items-stretch bg-white box-border">
+                                                                        <div key={i} className="flex flex-col md:flex-row print:flex-row w-full flex-1 items-stretch bg-white box-border">
                                                                             <div className="w-full md:w-1/2 print:w-1/2 md:border-r-[2px] print:border-r-[2px] border-slate-800 flex box-border">
                                                                                 <RoomRow room={leftRoom} actualIdx={pageStartIndex + i + 1} globalIdx={leftGlobalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} isSharedMode={isSharedMode} />
                                                                             </div>
@@ -1442,8 +1466,8 @@
 
                                                 {/* 4. 룸 리스트 푸터 (마지막 페이지만 표시) */}
                                                 {pageIndex === totalRoomPages - 1 && (
-                                                    <div className="print-footer w-full mt-auto pt-8 print:pt-2">
-                                                        <div className="flex justify-between items-end border-t-[2px] border-slate-800 pt-4 pb-2 w-full">
+                                                    <div className="print-footer w-full mt-auto pt-4 print:pt-2">
+                                                        <div className="flex justify-between items-end border-t-[2px] border-slate-800 pt-2 pb-1 w-full">
                                                             <div className="font-bold text-slate-500" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>
                                                                 작성일: {new Date().toLocaleDateString()}
                                                             </div>
