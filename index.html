@@ -882,19 +882,41 @@
             const removeRoom = (globalIdx) => setRooms(prev => prev.filter((_, idx) => idx !== globalIdx));
             const addRoom = () => setRooms(prev => [...prev, { id: Date.now() + Math.random(), roomNo: '', type: 'TWIN', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }]);
 
-            // 스마트 페이징: 영문 모드 여부에 따라 페이지당 객실 수 동적 할당
-            // 국내(한글): 1페이지 24개, 2페이지 34개
-            // 해외(영문): 1페이지 18개, 2페이지 26개 (영문 이름으로 인해 세로 높이가 길어짐을 보수적으로 반영)
-            const FIRST_PAGE_ROOMS = isInternationalRooming ? 18 : 24;
-            const OTHER_PAGE_ROOMS = isInternationalRooming ? 26 : 34;
+            // 스마트 페이징 (고도화): 1인실, 2인실, 3인실 등 객실 타입에 따른 세로 높이(가중치)를 동적 계산하여 완벽 분할
+            const getRoomWeight = (room) => room.guests.length; // 각 방의 투숙객 수 = 화면에 출력되는 행의 수
             const mappedRooms = rooms.map((r, idx) => ({ room: r, actualIdx: idx + 1, globalIdx: idx }));
             const roomPages = [];
-            let remainR = [...mappedRooms];
+            let currentRoomIndex = 0;
+            let rpIdx = 0;
 
-            if (remainR.length > 0) roomPages.push({ pageIndex: 0, data: remainR.splice(0, FIRST_PAGE_ROOMS) });
-            let rpIdx = 1;
-            while(remainR.length > 0) {
-                roomPages.push({ pageIndex: rpIdx++, data: remainR.splice(0, OTHER_PAGE_ROOMS) });
+            while (currentRoomIndex < mappedRooms.length) {
+                // 한 다단(왼쪽/오른쪽 열)에 들어갈 수 있는 최대 '행(Row)'의 수 지정
+                // 국내(한글): 1페이지 24줄, 2페이지 34줄
+                // 해외(영문): 1페이지 18줄, 2페이지 26줄
+                let columnLimit = isInternationalRooming ? (rpIdx === 0 ? 18 : 26) : (rpIdx === 0 ? 24 : 34);
+                
+                let bestN = 0;
+                // 1개의 방부터 시작해서, 현재 페이지에 최대 몇 개의 방을 넣을 수 있는지 테스트
+                for (let n = 1; n <= mappedRooms.length - currentRoomIndex; n++) {
+                    let testRooms = mappedRooms.slice(currentRoomIndex, currentRoomIndex + n);
+                    let half = Math.ceil(testRooms.length / 2); // 반으로 나누어 좌/우 배치
+                    
+                    // 좌/우 열의 실제 사용되는 행(줄) 수 계산
+                    let lWeight = testRooms.slice(0, half).reduce((sum, r) => sum + getRoomWeight(r.room), 0);
+                    let rWeight = testRooms.slice(half).reduce((sum, r) => sum + getRoomWeight(r.room), 0);
+                    
+                    // 좌우 모두 행 제한선을 넘지 않으면 통과
+                    if (lWeight <= columnLimit && rWeight <= columnLimit) {
+                        bestN = n; 
+                    } else {
+                        break; // 하나라도 한계치를 넘으면 멈추고 다음 페이지로 넘김
+                    }
+                }
+                if (bestN === 0) bestN = 1; // 무한루프 방지
+                
+                roomPages.push({ pageIndex: rpIdx, data: mappedRooms.slice(currentRoomIndex, currentRoomIndex + bestN) });
+                currentRoomIndex += bestN;
+                rpIdx++;
             }
             const totalRoomPages = roomPages.length;
 
