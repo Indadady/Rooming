@@ -25,7 +25,7 @@
     <!-- SheetJS with Styling -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 
-    <!-- Firebase Modules (Babel의 dynamic import 오류 우회) -->
+    <!-- Firebase Modules -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -60,12 +60,17 @@
             th { border-top: 2px solid #1e293b !important; border-bottom: 2px solid #1e293b !important; color: #1e293b !important; }
             .print-footer { margin-top: auto !important; page-break-inside: avoid; width: 100%; padding-top: 15px !important; background: white !important; }
             .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; display: flex !important; flex-direction: column !important; }
-            .room-row { padding: 0 !important; break-inside: avoid; }
+            
+            /* Print Specific borders for tbody rowspan */
+            tbody.print\:table-row-group td { border-bottom: 1px solid #cbd5e1 !important; }
+            tbody.print\:table-row-group:not(:last-child) { border-bottom: 2px solid #94a3b8 !important; }
+            
             input, select, textarea { border: none !important; background: transparent !important; appearance: none; -webkit-appearance: none; }
             input::placeholder, textarea::placeholder { color: transparent !important; }
         }
 
-        .dragging { opacity: 0.55; background-color: #e0f2fe; }
+        .dragging { opacity: 0.55; }
+        .dragging td { background-color: #e0f2fe !important; }
         .drag-handle { cursor: grab; }
         .drag-handle:active { cursor: grabbing; }
 
@@ -83,9 +88,9 @@
         
         .fixed-row-height { height: 36px; } 
 
-        /* ROOM NO 칸 및 전체 그리드 너비 최적화: 가로 밀림 원천 차단 (minmax 적용) */
-        .room-grid { display: grid; grid-template-columns: 35px 9% 13% minmax(0, 1fr) 22%; align-items: stretch; width: 100%; box-sizing: border-box; overflow: hidden; }
-        @media print { .room-grid { grid-template-columns: 9% 13% minmax(0, 1fr) 22%; width: 100%; } }
+        /* 2단 분할 Grid CSS (국내/해외 공통 적용) - 방번호 칸 확대 (24% -> 28%) */
+        .room-grid { display: grid; grid-template-columns: 35px 8% 12% minmax(0, 1fr) 28%; align-items: stretch; width: 100%; box-sizing: border-box; overflow: hidden; }
+        @media print { .room-grid { grid-template-columns: 8% 12% minmax(0, 1fr) 28%; width: 100%; } }
 
         .room-row input::placeholder { color: transparent !important; transition: color 0.2s ease-in-out; }
         .room-row:hover input::placeholder, .room-row input:focus::placeholder { color: #cbd5e1 !important; }
@@ -168,7 +173,8 @@
             />
         );
 
-        const RoomRow = ({ room, actualIdx, globalIdx, updateRoom, updateGuest, changeRoomType, removeRoom, dragRoomStart, dragRoomEnter, dragRoomEnd, dropRoom, fontSize, isInternationalRooming, isSharedMode }) => (
+        // 2단 분할 Grid용 공통 Component (국내/해외 통합)
+        const RoomRow = ({ room, actualIdx, globalIdx, updateRoom, updateGuest, changeRoomType, removeRoom, dragRoomStart, dragRoomEnter, dragRoomEnd, dropRoom, fontSize, isSharedMode, isInternationalRooming }) => (
             <div
                 className="room-row room-grid group relative bg-white w-full h-full border-b border-slate-300 last:border-b-0 print:border-b box-border"
                 style={{ breakInside: 'avoid' }}
@@ -195,9 +201,9 @@
 
                 <div className="flex flex-col py-0.5 bg-white min-w-0 border-r border-slate-200 justify-center">
                     {room.guests.map((g, gIdx) => (
-                        <div key={gIdx} className={`flex flex-col px-1.5 md:px-2 py-1 ${gIdx > 0 ? 'border-t border-dashed border-slate-200' : ''}`} style={{ padding: `${fontSize/2.5}px 4px` }}>
+                        <div key={gIdx} className={`flex flex-col w-full min-w-0 px-1.5 md:px-2 py-1 ${gIdx > 0 ? 'border-t border-dashed border-slate-200' : ''}`} style={{ padding: `${fontSize/2.5}px 4px` }}>
                             <div className="flex items-center gap-1 md:gap-2 w-full min-w-0">
-                                <input className="font-bold outline-none bg-transparent focus:text-blue-600 min-w-0 flex-shrink-0" style={{ fontSize: `${fontSize}pt`, width: `${Math.max(60, fontSize * 5)}px` }} value={g.name} placeholder="이름" onChange={(e) => updateGuest(globalIdx, gIdx, 'name', e.target.value)} />
+                                <input className="font-bold outline-none bg-transparent focus:text-blue-600 min-w-0 flex-shrink-0" style={{ fontSize: `${fontSize}pt`, width: `${Math.max(50, fontSize * 4.5)}px` }} value={g.name} placeholder="이름" onChange={(e) => updateGuest(globalIdx, gIdx, 'name', e.target.value)} />
                                 <button type="button" onClick={() => updateGuest(globalIdx, gIdx, 'gender', g.gender === '남' ? '여' : '남')} className={`flex-shrink-0 font-bold px-1.5 py-0.5 rounded cursor-pointer ${g.gender === '여' ? 'bg-pink-50 text-pink-600' : 'bg-blue-50 text-blue-600'}`} style={{ fontSize: `${Math.max(8, fontSize - 2)}pt`, minWidth: '24px' }}>
                                     {g.gender}
                                 </button>
@@ -225,7 +231,6 @@
 
             const [isSharedMode, setIsSharedMode] = useState(isInitialShared);
             const [activeMainTab, setActiveMainTab] = useState(isInitialShared ? 'rooming' : 'traveler');
-            // 기본값을 켜둠으로 변경하여 사용자가 항상 바로 변환기를 볼 수 있도록 유도
             const [isNavMenuOpen, setIsNavMenuOpen] = useState(true);
 
             const [docFontSize, setDocFontSize] = useState(10.5); 
@@ -261,8 +266,6 @@
                         if (typeof __firebase_config !== 'undefined') {
                             firebaseConfig = JSON.parse(__firebase_config);
                         } else {
-                            // [중요!] 대표님 깃허브 배포용 실제 파이어베이스 설정 영역
-                            // Github Pages에 업로드 하실 때에는 아래 정보를 대표님의 Firebase 프로젝트 설정값으로 교체하셔야 데이터베이스 연동이 작동합니다!
                             firebaseConfig = {
                                 apiKey: "AIzaSyDPR8YwFV4CuGoaD7q4EVwNEalr4tjTWYY",
                                 authDomain: "tourmaker-rooming.firebaseapp.com",
@@ -443,7 +446,6 @@
                 travelerPages.push({ pageIndex: i, data: travelers.slice(i * TRAVELER_ROWS_PER_PAGE, (i + 1) * TRAVELER_ROWS_PER_PAGE) });
             }
 
-            // [여행자 엑셀 처리 로직]
             const downloadExcelTemplate = () => {
                 const ws_data = [
                     ['순번', '성명', '영문명(NAME)', '생년월일', '성별(M/F)', '여권번호', '여권만료일', '국적', '기타'],
@@ -612,9 +614,9 @@
 
 
             // ==========================================
-            // [TAB 2] 방 배정 (루밍리스트)
+            // [TAB 2] 방 배정 (루밍리스트) - 국내(2단 Grid) / 해외(1단 Table) 투트랙
             // ==========================================
-            const [isInternationalRooming, setIsInternationalRooming] = useState(true);
+            const [isInternationalRooming, setIsInternationalRooming] = useState(false); // 기본값을 국내(false)로 변경
             const [rooms, setRooms] = useState([
                 { id: 1, type: 'TWIN', roomNo: '', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }
             ]);
@@ -623,11 +625,16 @@
             const dragRoomItem = useRef();
             const dragOverRoomItem = useRef();
 
-            const dragRoomStart = (e, position) => { dragRoomItem.current = position; e.target.closest('.room-row')?.classList.add('dragging'); };
-            const dragRoomEnter = (e, position) => { dragOverRoomItem.current = position; };
+            const dragRoomStart = (e, position) => { 
+                dragRoomItem.current = position; 
+                e.currentTarget.classList.add('dragging'); 
+            };
+            const dragRoomEnter = (e, position) => { 
+                dragOverRoomItem.current = position; 
+            };
             const dropRoom = (e) => {
-                const tr = e.target.closest('.room-row');
-                if (tr) tr.classList.remove('dragging');
+                const target = e.currentTarget;
+                target.classList.remove('dragging');
                 if (dragRoomItem.current === undefined || dragRoomItem.current === null || dragOverRoomItem.current === undefined || dragOverRoomItem.current === null) return;
                 setRooms(prev => {
                     const copyRooms = [...prev];
@@ -639,7 +646,11 @@
                 });
                 dragRoomItem.current = null; dragOverRoomItem.current = null;
             };
-            const dragRoomEnd = (e) => { e.target.closest('.room-row')?.classList.remove('dragging'); dragRoomItem.current = null; dragOverRoomItem.current = null;};
+            const dragRoomEnd = (e) => { 
+                e.currentTarget.classList.remove('dragging'); 
+                dragRoomItem.current = null; 
+                dragOverRoomItem.current = null;
+            };
 
             const roomStats = useMemo(() => {
                 let total = 0, male = 0, female = 0;
@@ -658,26 +669,27 @@
 
             const downloadRoomingExcelTemplate = () => {
                 const ws_data = [
-                    ['순서', '성명', '영문명(NAME)', '성별', '객실번호', '기타'],
-                    [1, '홍길동', 'HONG GILDONG', '남', '101호', '인솔자'],
-                    [1, '김철수', 'KIM CHULSOO', '남', '', ''],
-                    [2, '이영희', 'LEE YOUNGHEE', '여', '202호', ''],
-                    [2, '박민지', 'PARK MINJI', '여', '', ''],
-                    [2, '최수진', 'CHOI SUJIN', '여', '', ''],
-                    ['', '', '', '', '', ''],
-                    ['', '', '', '', 'System Powered by TOURMAKER', '']
+                    ['순서', '객실번호', '타입', '성명', '영문명(NAME)', '성별', '기타'],
+                    [1, '101호', 'TWN', '홍길동', 'HONG GILDONG', '남', '인솔자'],
+                    [1, '', '', '김철수', 'KIM CHULSOO', '남', ''],
+                    [2, '202호', 'TWN', '이영희', 'LEE YOUNGHEE', '여', ''],
+                    [2, '', '', '박민지', 'PARK MINJI', '여', ''],
+                    ['', '', '', '', '', '', ''],
+                    ['', '', '', '', 'System Powered by TOURMAKER', '', '']
                 ];
                 const ws = XLSX.utils.aoa_to_sheet(ws_data);
                 
                 ws['!merges'] = [
                     { s: { r: 1, c: 0 }, e: { r: 2, c: 0 } }, 
-                    { s: { r: 1, c: 4 }, e: { r: 2, c: 4 } }, 
-                    { s: { r: 3, c: 0 }, e: { r: 5, c: 0 } }, 
-                    { s: { r: 3, c: 4 }, e: { r: 5, c: 4 } },  
-                    { s: { r: 7, c: 4 }, e: { r: 7, c: 5 } }  
+                    { s: { r: 1, c: 1 }, e: { r: 2, c: 1 } }, 
+                    { s: { r: 1, c: 2 }, e: { r: 2, c: 2 } }, 
+                    { s: { r: 3, c: 0 }, e: { r: 4, c: 0 } }, 
+                    { s: { r: 3, c: 1 }, e: { r: 4, c: 1 } },  
+                    { s: { r: 3, c: 2 }, e: { r: 4, c: 2 } },  
+                    { s: { r: 6, c: 4 }, e: { r: 6, c: 6 } }  
                 ];
                 
-                const borders = [2, 5]; 
+                const borders = [2, 4]; 
 
                 const headerStyle = { font: { name: '맑은 고딕', sz: 11, bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "047857" } }, alignment: { horizontal: "center", vertical: "center" } };
                 const dataStyle = { font: { name: '맑은 고딕', sz: 10 }, alignment: { horizontal: "center", vertical: "center" } };
@@ -691,9 +703,9 @@
                         
                         let s = R === 0 ? { ...headerStyle } : { ...dataStyle };
                         
-                        if (R === 6 || R === 7) {
+                        if (R === 5 || R === 6) {
                             s.border = {}; 
-                            if (R === 7 && C === 4) s = { ...logoStyle };
+                            if (R === 6 && C === 4) s = { ...logoStyle };
                         } else {
                             s.border = { left: { style: "thin", color: { rgb: "CBD5E1" } }, right: { style: "thin", color: { rgb: "CBD5E1" } } };
                             if (R === 0) {
@@ -708,8 +720,8 @@
                         ws[cell].s = s;
                     }
                 }
-                ws['!rows'] = [{ hpt: 25 }, { hpt: 20 }, { hpt: 20 }, { hpt: 20 }, { hpt: 20 }, { hpt: 20 }, { hpt: 15 }, { hpt: 25 }];
-                ws['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 22 }, { wch: 8 }, { wch: 20 }, { wch: 20 }];
+                ws['!rows'] = [{ hpt: 25 }, { hpt: 20 }, { hpt: 20 }, { hpt: 20 }, { hpt: 20 }, { hpt: 15 }, { hpt: 25 }];
+                ws['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 22 }, { wch: 8 }, { wch: 20 }];
 
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "방배정_표준양식");
@@ -717,7 +729,7 @@
             };
 
             const exportRoomingToExcel = () => {
-                const ws_data = [['순서', '성명', '영문명(NAME)', '성별', '객실번호', '기타']];
+                const ws_data = [['순서', '객실번호', '타입', '성명', '영문명(NAME)', '성별', '기타']];
                 const borders = []; 
                 const merges = [];
 
@@ -729,7 +741,7 @@
 
                     r.guests.forEach((g) => {
                         if (g.name.trim() !== "" || r.roomNo.trim() !== "") {
-                            ws_data.push([roomNumberDisplay, g.name, g.engName, g.gender, r.roomNo, g.remark]);
+                            ws_data.push([roomNumberDisplay, r.roomNo, r.type, g.name, g.engName, g.gender, g.remark]);
                             currentRowIdx++;
                             addedCount++;
                         }
@@ -739,20 +751,21 @@
                         borders.push(currentRowIdx - 1); 
                         if (addedCount > 1) {
                             merges.push({ s: { r: startRow, c: 0 }, e: { r: currentRowIdx - 1, c: 0 } });
-                            merges.push({ s: { r: startRow, c: 4 }, e: { r: currentRowIdx - 1, c: 4 } });
+                            merges.push({ s: { r: startRow, c: 1 }, e: { r: currentRowIdx - 1, c: 1 } });
+                            merges.push({ s: { r: startRow, c: 2 }, e: { r: currentRowIdx - 1, c: 2 } });
                         }
                     }
                 });
 
                 if (ws_data.length === 1) return showAlert("⚠️ 내보낼 방 배정 데이터가 없습니다.");
 
-                ws_data.push(['', '', '', '', '', '']); 
+                ws_data.push(['', '', '', '', '', '', '']); 
                 const emptyRowIdx = currentRowIdx;
                 currentRowIdx++;
 
-                ws_data.push(['', '', '', '', 'System Powered by TOURMAKER', '']);
+                ws_data.push(['', '', '', '', 'System Powered by TOURMAKER', '', '']);
                 const logoRowIdx = currentRowIdx;
-                merges.push({ s: { r: logoRowIdx, c: 4 }, e: { r: logoRowIdx, c: 5 } }); 
+                merges.push({ s: { r: logoRowIdx, c: 4 }, e: { r: logoRowIdx, c: 6 } }); 
 
                 const ws = XLSX.utils.aoa_to_sheet(ws_data);
                 if (merges.length > 0) ws['!merges'] = merges;
@@ -793,7 +806,7 @@
                 rowHeights[logoRowIdx] = { hpt: 25 };
                 ws['!rows'] = rowHeights; 
                 
-                ws['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 22 }, { wch: 8 }, { wch: 20 }, { wch: 20 }];
+                ws['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 22 }, { wch: 8 }, { wch: 20 }];
 
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "방배정_명단");
@@ -867,15 +880,15 @@
             const removeRoom = (globalIdx) => setRooms(prev => prev.filter((_, idx) => idx !== globalIdx));
             const addRoom = () => setRooms(prev => [...prev, { id: Date.now() + Math.random(), roomNo: '', type: 'TWIN', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }]);
 
-            /* 페이지 당 방 개수 조정: 영문 이름 기재 시 세로 높이 증가를 고려하여 36 -> 26으로 하향 (좌 13, 우 13) */
-            const ROOMS_PER_PAGE = 26;
+            // 동적 룸 개수 계산: 영문명이 들어가면 칸의 세로 높이가 길어지므로 페이지당 객실 수를 줄임 (2단 분할 공통)
+            // 국내(한글만) = 14줄 * 2단 = 28객실 / 해외(영문포함) = 10줄 * 2단 = 20객실
+            const ROOMS_PER_PAGE = isInternationalRooming ? 20 : 28; 
             const roomPages = [];
             const totalRoomPages = Math.max(1, Math.ceil(rooms.length / ROOMS_PER_PAGE));
             for (let i = 0; i < totalRoomPages; i++) roomPages.push(rooms.slice(i * ROOMS_PER_PAGE, (i + 1) * ROOMS_PER_PAGE));
 
             // 시스템 기능들 (프린트 및 링크 복사 등)
             const handleCopyLink = () => {
-                // Generate a code if empty
                 if(!commonHeader.eventCode) {
                     setCommonHeader(prev => ({...prev, eventCode: generateEventCode()}));
                 }
@@ -1166,7 +1179,7 @@
                         </div>
 
                         {/* ========================================================================= */}
-                        {/* TAB 2: 방 배정 (루밍리스트) / 고객 작성 화면 */}
+                        {/* TAB 2: 방 배정 (루밍리스트) - 투트랙 렌더링 적용 구역 */}
                         {/* ========================================================================= */}
                         <div className={activeMainTab === 'rooming' ? 'block' : 'hidden'}>
                             <div className="w-full max-w-full xl:max-w-[1400px] mx-auto p-0 sm:p-4 md:p-6 print-rooming-list">
@@ -1220,7 +1233,7 @@
                                         </div>
                                     </div>
 
-                                    {/* 복붙 기능 패널 (고객, 관리자 공통) */}
+                                    {/* 복붙 기능 패널 */}
                                     {isNavMenuOpen && (
                                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6">
                                             <div className="flex border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-xs md:text-sm font-bold text-blue-700 items-center justify-center md:justify-start">
@@ -1247,8 +1260,6 @@
 
                                 <div className="space-y-6 print:space-y-0 w-full">
                                     {roomPages.map((pageRooms, pageIndex) => {
-                                        const leftTableRooms = pageRooms.slice(0, Math.ceil(pageRooms.length / 2));
-                                        const rightTableRooms = pageRooms.slice(Math.ceil(pageRooms.length / 2));
                                         const pageStartIndex = pageIndex * ROOMS_PER_PAGE;
 
                                         return (
@@ -1289,8 +1300,9 @@
                                                     </div>
 
                                                     <div className="table-wrapper flex-1 w-full relative box-border overflow-hidden">
+                                                        {/* 국내/해외 공통: 2단 분할 그리드 (Grid) 렌더링 로직 */}
                                                         <div className="w-full border-t-[2px] border-slate-800 border-b-[3px] border-slate-800 print:border-b-2 flex flex-col bg-white box-border max-w-full">
-                                                            
+                                                            {/* 좌우 분할 헤더 */}
                                                             <div className="flex flex-col md:flex-row print:flex-row items-stretch w-full border-b-[2px] border-slate-800 text-slate-800 font-bold bg-slate-50 box-border" style={{ fontSize: `${Math.max(8, docFontSize - 1)}pt` }}>
                                                                 <div className="room-grid text-center items-stretch w-full md:w-1/2 print:w-1/2 md:border-r-[2px] print:border-r-[2px] border-slate-800 box-border">
                                                                     <div className="no-print flex items-center justify-center py-2 border-r border-slate-200"><i className="fas fa-sort text-slate-300"></i></div>
@@ -1308,33 +1320,42 @@
                                                                 </div>
                                                             </div>
 
+                                                            {/* 좌우 데이터 매핑 */}
                                                             <div className="flex flex-col w-full box-border">
-                                                                {Array.from({ length: leftTableRooms.length }).map((_, i) => {
-                                                                    const leftRoom = leftTableRooms[i];
-                                                                    const rightRoom = rightTableRooms[i];
-                                                                    const leftGlobalIdx = rooms.findIndex(r => r.id === leftRoom.id);
-                                                                    const rightGlobalIdx = rightRoom ? rooms.findIndex(r => r.id === rightRoom.id) : -1;
+                                                                {(() => {
+                                                                    const halfLength = Math.ceil(pageRooms.length / 2);
+                                                                    const leftTableRooms = pageRooms.slice(0, halfLength);
+                                                                    const rightTableRooms = pageRooms.slice(halfLength);
+                                                                    
+                                                                    return Array.from({ length: leftTableRooms.length }).map((_, i) => {
+                                                                        const leftRoom = leftTableRooms[i];
+                                                                        const rightRoom = rightTableRooms[i];
+                                                                        const leftGlobalIdx = rooms.findIndex(r => r.id === leftRoom.id);
+                                                                        const rightGlobalIdx = rightRoom ? rooms.findIndex(r => r.id === rightRoom.id) : -1;
 
-                                                                    return (
-                                                                        <div key={i} className="flex flex-col md:flex-row print:flex-row w-full items-stretch bg-white box-border">
-                                                                            <div className="w-full md:w-1/2 print:w-1/2 md:border-r-[2px] print:border-r-[2px] border-slate-800 flex box-border">
-                                                                                <RoomRow room={leftRoom} actualIdx={pageStartIndex + i + 1} globalIdx={leftGlobalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} isSharedMode={isSharedMode} />
+                                                                        return (
+                                                                            <div key={i} className="flex flex-col md:flex-row print:flex-row w-full items-stretch bg-white box-border">
+                                                                                {/* 좌측 열 */}
+                                                                                <div className="w-full md:w-1/2 print:w-1/2 md:border-r-[2px] print:border-r-[2px] border-slate-800 flex box-border">
+                                                                                    <RoomRow room={leftRoom} actualIdx={pageStartIndex + i + 1} globalIdx={leftGlobalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isSharedMode={isSharedMode} isInternationalRooming={isInternationalRooming} />
+                                                                                </div>
+                                                                                {/* 우측 열 */}
+                                                                                <div className="w-full md:w-1/2 print:w-1/2 flex border-b md:border-b-0 print:border-b-0 border-slate-300 box-border">
+                                                                                    {rightRoom ? (
+                                                                                        <RoomRow room={rightRoom} actualIdx={pageStartIndex + leftTableRooms.length + i + 1} globalIdx={rightGlobalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isSharedMode={isSharedMode} isInternationalRooming={isInternationalRooming}/>
+                                                                                    ) : (
+                                                                                        <div className="w-full h-full bg-white border-b border-slate-300 last:border-b-0 print:border-b box-border"></div>
+                                                                                    )}
+                                                                                </div>
                                                                             </div>
-                                                                            <div className="w-full md:w-1/2 print:w-1/2 flex border-b md:border-b-0 print:border-b-0 border-slate-300 box-border">
-                                                                                {rightRoom ? (
-                                                                                    <RoomRow room={rightRoom} actualIdx={pageStartIndex + leftTableRooms.length + i + 1} globalIdx={rightGlobalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} isSharedMode={isSharedMode}/>
-                                                                                ) : (
-                                                                                    <div className="w-full h-full bg-white border-b border-slate-300 last:border-b-0 print:border-b box-border"></div>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                })}
+                                                                        );
+                                                                    });
+                                                                })()}
                                                             </div>
                                                         </div>
                                                     </div>
-                                                </div>
 
+                                                </div>
                                                 <div className="print-footer w-full mt-auto pt-8">
                                                     <div className="flex justify-between items-end border-t-[2px] border-slate-800 pt-4 pb-2 w-full">
                                                         <div className="font-bold text-slate-500" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>
