@@ -896,8 +896,9 @@
             let rpIdx = 0;
 
             while (currentRoomIndex < mappedRooms.length) {
-                // 1페이지는 상단 헤더 공간만큼 제한(60), 2페이지부터는 전체 공간(86) 사용
-                let columnLimit = rpIdx === 0 ? 60 : 86;
+                // 1페이지는 상단 헤더 공간만큼 제한(60)
+                // 2페이지부터는 이전 간격 확장 패치로 인해 행 높이가 늘어난 것을 반영하여 86 -> 74로 보수적 하향 조정
+                let columnLimit = rpIdx === 0 ? 60 : 74;
                 
                 let bestN = 0;
                 for (let n = 1; n <= mappedRooms.length - currentRoomIndex; n++) {
