@@ -63,6 +63,14 @@
             .room-row { padding: 0 !important; break-inside: avoid; }
             input, select, textarea { border: none !important; background: transparent !important; appearance: none; -webkit-appearance: none; }
             input::placeholder, textarea::placeholder { color: transparent !important; }
+
+            /* 가로 밀림 원천 차단 및 세로 공간 극대화를 위한 프린트 전용 여백 압축 */
+            .room-grid > div { padding-top: 2px !important; padding-bottom: 2px !important; }
+            .room-row .flex-col { padding-top: 1px !important; padding-bottom: 1px !important; }
+            .room-row input { margin: 0 !important; line-height: 1.1 !important; }
+            .print-page h2 { margin-top: 0 !important; margin-bottom: 4px !important; }
+            .print-page .pb-3 { padding-bottom: 4px !important; }
+            .print-page .mb-3 { margin-bottom: 4px !important; }
         }
 
         .dragging { opacity: 0.55; background-color: #e0f2fe; }
@@ -1174,17 +1182,19 @@
                                             </div>
                                         </div>
                                         
-                                        <div className={`print-footer w-full mt-auto pt-8 ${isLastPage ? '' : 'invisible'}`}>
-                                            <div className="flex justify-between items-end border-t-[2px] border-slate-800 pt-4 pb-2 w-full">
+                                        <div className={`print-footer w-full mt-auto pt-6 ${isLastPage ? 'block' : 'hidden print:hidden'}`}>
+                                            <div className="flex justify-between items-end border-t-[2px] border-slate-800 pt-3 pb-1 w-full px-1">
                                                 <div className="font-bold text-slate-500" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>
-                                                    작성일: {new Date().toLocaleDateString()}
+                                                    작성일: {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric' })}
                                                 </div>
-                                                <div className="flex flex-col items-end justify-center gap-1.5 pr-1">
-                                                    <img src={TM_FOOTER_LOGO} alt="Tourmaker" className="h-6 md:h-8 object-contain" />
-                                                    <p className="text-[#6c757d] leading-relaxed m-0 font-bold text-right tracking-tight" style={{ fontSize: `${Math.max(7, docFontSize - 3)}pt` }}>
-                                                        본 시스템은 <span className="text-slate-800 font-black">{commonHeader.groupName || '해당 단체'}</span>의 기획과 투어메이커의 트래블 테크 기술 제휴로 제작되었습니다.
-                                                    </p>
+                                                <div className="flex flex-col items-end justify-center pr-1">
+                                                    <img src={TM_FOOTER_LOGO} alt="Tourmaker" className="h-5 md:h-6 object-contain" />
                                                 </div>
+                                            </div>
+                                            <div className="w-full bg-slate-50 py-2.5 rounded-md border border-slate-200 mt-2 text-center flex justify-center items-center">
+                                                <p className="text-[#6c757d] m-0 font-bold tracking-tight" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>
+                                                    [System Powered by <span className="font-black text-slate-600">TOURMAKER</span>] 본 시스템은 <span className="text-slate-800 font-black">{commonHeader.groupName || '해당 단체'}</span>의 기획과 투어메이커의 트래블 테크 기술 제휴로 제작되었습니다.
+                                                </p>
                                             </div>
                                         </div>
                                     </div>
@@ -1375,17 +1385,19 @@
                                                     </div>
                                                 </div>
 
-                                                <div className={`print-footer w-full mt-auto pt-8 ${isLastPage ? '' : 'invisible'}`}>
-                                                    <div className="flex justify-between items-end border-t-[2px] border-slate-800 pt-4 pb-2 w-full">
+                                                <div className={`print-footer w-full mt-auto pt-6 ${isLastPage ? 'block' : 'hidden print:hidden'}`}>
+                                                    <div className="flex justify-between items-end border-t-[2px] border-slate-800 pt-3 pb-1 w-full px-1">
                                                         <div className="font-bold text-slate-500" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>
-                                                            작성일: {new Date().toLocaleDateString()}
+                                                            작성일: {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric' })}
                                                         </div>
-                                                        <div className="flex flex-col items-end justify-center gap-1.5 pr-1">
-                                                            <img src={TM_FOOTER_LOGO} alt="Tourmaker" className="h-6 md:h-8 object-contain" />
-                                                            <p className="text-[#6c757d] leading-relaxed m-0 font-bold text-right tracking-tight" style={{ fontSize: `${Math.max(7, docFontSize - 3)}pt` }}>
-                                                                본 시스템은 <span className="text-slate-800 font-black">{commonHeader.groupName || '해당 단체'}</span>의 기획과 투어메이커의 트래블 테크 기술 제휴로 제작되었습니다.
-                                                            </p>
+                                                        <div className="flex flex-col items-end justify-center pr-1">
+                                                            <img src={TM_FOOTER_LOGO} alt="Tourmaker" className="h-5 md:h-6 object-contain" />
                                                         </div>
+                                                    </div>
+                                                    <div className="w-full bg-slate-50 py-2.5 rounded-md border border-slate-200 mt-2 text-center flex justify-center items-center">
+                                                        <p className="text-[#6c757d] m-0 font-bold tracking-tight" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>
+                                                            [System Powered by <span className="font-black text-slate-600">TOURMAKER</span>] 본 시스템은 <span className="text-slate-800 font-black">{commonHeader.groupName || '해당 단체'}</span>의 기획과 투어메이커의 트래블 테크 기술 제휴로 제작되었습니다.
+                                                        </p>
                                                     </div>
                                                 </div>
                                             </div>
