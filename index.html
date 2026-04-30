@@ -753,7 +753,7 @@
             };
             
             const getStableEventCode = () => {
-                const current = safeText(commonHeader.eventCode).toUpperCase();
+                const current = safeText(commonHeader.eventCode);
                 if (current) return current;
                 const nextCode = generateEventCode();
                 setCommonHeader(prev => ({ ...prev, eventCode: nextCode }));
@@ -1157,7 +1157,30 @@
                         }
                         setActiveMainTab('rooming');
                         setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null, onChange: null }); 
-                        showAlert("✅ 고객 제출본이 현재 화면에 적용되었습니다. PDF 인쇄 또는 엑셀 저장 전 한 번만 검수해 주세요.");
+                        showAlert("✅ 고객 제출본이 현재 화면에 동일 데이터 기준으로 적용되었습니다. PDF 인쇄 또는 엑셀 저장 전 한 번만 검수해 주세요.");
+                    },
+                    onCancel: () => { setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null, onChange: null }); }
+                });
+            };
+
+            // 제출된 개별 배정본 삭제 기능 (실무자용 정리 기능)
+            const handleDeleteSubmission = (subId) => {
+                setModal({
+                    isOpen: true,
+                    type: 'confirm',
+                    message: '이 제출본을 정말 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.',
+                    inputValue: '',
+                    onConfirm: async () => {
+                        try {
+                            const { doc, deleteDoc } = window.FirebaseModules;
+                            const subRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooming_submissions', subId);
+                            await deleteDoc(subRef);
+                            setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null, onChange: null });
+                            showAlert("✅ 불필요한 제출본이 성공적으로 삭제되었습니다.");
+                        } catch (err) {
+                            console.error("Delete error:", err);
+                            showAlert("⚠️ 삭제 중 오류가 발생했습니다.");
+                        }
                     },
                     onCancel: () => { setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null, onChange: null }); }
                 });
@@ -1217,7 +1240,7 @@
                                     <React.Fragment>
                                         <div className="hidden lg:flex items-center gap-2 mr-2 bg-slate-800 px-2 py-1 rounded text-xs">
                                             <span className="text-slate-400 whitespace-nowrap">공유 코드:</span>
-                                            <input type="text" className="bg-transparent text-emerald-400 font-bold w-24 xl:w-40 outline-none text-center transition-all" value={commonHeader.eventCode} onChange={e=>setCommonHeader({...commonHeader, eventCode: e.target.value.toUpperCase()})} placeholder="코드" />
+                                            <input type="text" className="bg-transparent text-emerald-400 font-bold w-24 xl:w-40 outline-none text-center transition-all" value={commonHeader.eventCode} onChange={e=>setCommonHeader({...commonHeader, eventCode: e.target.value})} placeholder="코드" />
                                         </div>
                                         <button onClick={handleCopyLink} className="text-emerald-300 hover:text-emerald-100 px-2 py-1.5 text-xs font-bold transition flex items-center gap-1 whitespace-nowrap" title="고객 설문 전송용 링크 복사"><i className="fas fa-link"></i> 링크 복사</button>
                                     </React.Fragment>
@@ -1610,8 +1633,11 @@
                                     ) : (
                                         <div className="grid gap-4">
                                             {submissions.map((sub, idx) => (
-                                                <div key={sub.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:shadow-md transition">
-                                                    <div>
+                                                <div key={sub.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:shadow-md transition relative group">
+                                                    <button onClick={() => handleDeleteSubmission(sub.id)} className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors" title="이 제출본 삭제">
+                                                        <i className="fas fa-times text-lg"></i>
+                                                    </button>
+                                                    <div className="pr-6">
                                                         <div className="flex items-center gap-2 mb-1">
                                                             <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">NEW</span>
                                                             <h3 className="text-lg font-black text-slate-800">{sub.submitterName} 제출본</h3>
@@ -1622,7 +1648,7 @@
                                                             <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold"><i className="fas fa-bed mr-1 text-slate-400"></i> 객실 {sub.rooms?.length || 0}개</span>
                                                         </div>
                                                     </div>
-                                                    <button onClick={() => loadSubmission(sub)} className="w-full md:w-auto bg-slate-800 hover:bg-black text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow-sm transition flex items-center justify-center gap-2">
+                                                    <button onClick={() => loadSubmission(sub)} className="w-full md:w-auto bg-slate-800 hover:bg-black text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow-sm transition flex items-center justify-center gap-2 mt-2 md:mt-0">
                                                         <i className="fas fa-file-import"></i> 이 배정본 적용하기
                                                     </button>
                                                 </div>
