@@ -876,9 +876,9 @@
 
             // 스마트 페이징: 영문 모드 여부에 따라 페이지당 객실 수 동적 할당
             // 국내(한글): 1페이지 24개, 2페이지 34개
-            // 해외(영문): 1페이지 20개, 2페이지 28개 (영문 이름으로 인해 세로 높이가 길어짐을 반영)
-            const FIRST_PAGE_ROOMS = isInternationalRooming ? 20 : 24;
-            const OTHER_PAGE_ROOMS = isInternationalRooming ? 28 : 34;
+            // 해외(영문): 1페이지 18개, 2페이지 26개 (영문 이름으로 인해 세로 높이가 길어짐을 보수적으로 반영)
+            const FIRST_PAGE_ROOMS = isInternationalRooming ? 18 : 24;
+            const OTHER_PAGE_ROOMS = isInternationalRooming ? 26 : 34;
             const mappedRooms = rooms.map((r, idx) => ({ room: r, actualIdx: idx + 1, globalIdx: idx }));
             const roomPages = [];
             let remainR = [...mappedRooms];
