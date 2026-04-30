@@ -83,9 +83,9 @@
         
         .fixed-row-height { height: 36px; } 
 
-        /* ROOM NO 칸 및 전체 그리드 너비 최적화: 영문/한글 모두 조화로운 밸런스 */
-        .room-grid { display: grid; grid-template-columns: 35px 9% 13% 1fr 22%; align-items: stretch; }
-        @media print { .room-grid { grid-template-columns: 9% 13% 1fr 22%; } }
+        /* ROOM NO 칸 및 전체 그리드 너비 최적화: 가로 밀림 원천 차단 (minmax 적용) */
+        .room-grid { display: grid; grid-template-columns: 35px 9% 13% minmax(0, 1fr) 22%; align-items: stretch; width: 100%; box-sizing: border-box; overflow: hidden; }
+        @media print { .room-grid { grid-template-columns: 9% 13% minmax(0, 1fr) 22%; width: 100%; } }
 
         .room-row input::placeholder { color: transparent !important; transition: color 0.2s ease-in-out; }
         .room-row:hover input::placeholder, .room-row input:focus::placeholder { color: #cbd5e1 !important; }
@@ -867,7 +867,8 @@
             const removeRoom = (globalIdx) => setRooms(prev => prev.filter((_, idx) => idx !== globalIdx));
             const addRoom = () => setRooms(prev => [...prev, { id: Date.now() + Math.random(), roomNo: '', type: 'TWIN', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }]);
 
-            const ROOMS_PER_PAGE = 36;
+            /* 페이지 당 방 개수 조정: 영문 이름 기재 시 세로 높이 증가를 고려하여 36 -> 26으로 하향 (좌 13, 우 13) */
+            const ROOMS_PER_PAGE = 26;
             const roomPages = [];
             const totalRoomPages = Math.max(1, Math.ceil(rooms.length / ROOMS_PER_PAGE));
             for (let i = 0; i < totalRoomPages; i++) roomPages.push(rooms.slice(i * ROOMS_PER_PAGE, (i + 1) * ROOMS_PER_PAGE));
@@ -1288,7 +1289,7 @@
                                                     </div>
 
                                                     <div className="table-wrapper flex-1 w-full relative box-border overflow-hidden">
-                                                        <div className="w-full border-t-[2px] border-slate-800 border-b-[3px] border-slate-800 print:border-b-2 flex flex-col bg-white box-border">
+                                                        <div className="w-full border-t-[2px] border-slate-800 border-b-[3px] border-slate-800 print:border-b-2 flex flex-col bg-white box-border max-w-full">
                                                             
                                                             <div className="flex flex-col md:flex-row print:flex-row items-stretch w-full border-b-[2px] border-slate-800 text-slate-800 font-bold bg-slate-50 box-border" style={{ fontSize: `${Math.max(8, docFontSize - 1)}pt` }}>
                                                                 <div className="room-grid text-center items-stretch w-full md:w-1/2 print:w-1/2 md:border-r-[2px] print:border-r-[2px] border-slate-800 box-border">
