@@ -29,11 +29,11 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         window.FirebaseModules = {
             initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
-            getFirestore, collection, addDoc, onSnapshot
+            getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc
         };
     </script>
 
@@ -50,7 +50,8 @@
                 box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; 
                 page-break-after: always; break-inside: avoid !important; 
                 display: flex !important; flex-direction: column !important; justify-content: space-between !important;
-                height: 277mm !important; width: 100% !important; max-width: 100% !important; overflow: hidden !important; position: relative;
+                height: auto !important; min-height: 277mm !important; /* v2.1 패치: 강제 절단 해제 */
+                overflow: visible !important; position: relative;
             }
             .print-page:last-child { page-break-after: auto; }
             table { border-collapse: collapse !important; width: 100% !important; max-width: 100% !important; table-layout: fixed !important; }
@@ -71,7 +72,21 @@
             .print-page h2 { margin-top: 0 !important; margin-bottom: 4px !important; }
             .print-page .pb-3 { padding-bottom: 4px !important; }
             .print-page .mb-3 { margin-bottom: 4px !important; }
+            
+            /* v2.1 안정화 패치: 인쇄 클리핑 방지 + 긴 영문명 자동 줄바꿈 출력 */
+            .table-wrapper { overflow: visible !important; padding-bottom: 0 !important; }
+            .room-screen-input { display: none !important; }
+            .room-print-text {
+                display: block !important;
+                white-space: normal !important;
+                overflow-wrap: anywhere !important;
+                word-break: normal !important;
+                line-height: 1.18 !important;
+                min-width: 0 !important;
+            }
         }
+        
+        .room-print-text { display: none; } /* 화면에서는 숨김 처리 */
 
         .dragging { opacity: 0.55; background-color: #e0f2fe; }
         .drag-handle { cursor: grab; }
@@ -205,14 +220,24 @@
                     {room.guests.map((g, gIdx) => (
                         <div key={gIdx} className={`flex flex-col px-1.5 md:px-2 py-1 ${gIdx > 0 ? 'border-t border-dashed border-slate-200' : ''}`} style={{ padding: `${fontSize/2.5}px 4px` }}>
                             <div className="flex items-center gap-1 md:gap-2 w-full min-w-0">
-                                <input className="font-bold outline-none bg-transparent focus:text-blue-600 min-w-0 flex-shrink-0" style={{ fontSize: `${fontSize}pt`, width: `${Math.max(60, fontSize * 5)}px` }} value={g.name} placeholder="이름" onChange={(e) => updateGuest(globalIdx, gIdx, 'name', e.target.value)} />
+                                {/* 웹 화면용 입력 필드 */}
+                                <input className="room-screen-input font-bold outline-none bg-transparent focus:text-blue-600 min-w-0 flex-shrink-0" style={{ fontSize: `${fontSize}pt`, width: `${Math.max(60, fontSize * 5)}px` }} value={g.name} placeholder="이름" onChange={(e) => updateGuest(globalIdx, gIdx, 'name', e.target.value)} />
+                                {/* 인쇄 전용 텍스트 필드 (긴 글자 줄바꿈 용도) */}
+                                <div className="room-print-text font-bold text-slate-900 flex-shrink-0" style={{ fontSize: `${fontSize}pt`, width: `${Math.max(60, fontSize * 5)}px` }}>{g.name || ' '}</div>
+                                
                                 <button type="button" onClick={() => updateGuest(globalIdx, gIdx, 'gender', g.gender === '남' ? '여' : '남')} className={`flex-shrink-0 font-bold px-1.5 py-0.5 rounded cursor-pointer ${g.gender === '여' ? 'bg-pink-50 text-pink-600' : 'bg-blue-50 text-blue-600'}`} style={{ fontSize: `${Math.max(8, fontSize - 2)}pt`, minWidth: '24px' }}>
                                     {g.gender}
                                 </button>
-                                <input className="flex-1 min-w-[20px] text-slate-500 outline-none bg-transparent" style={{ fontSize: `${Math.max(9, fontSize - 1)}pt` }} placeholder={isSharedMode ? "(비고 입력)" : ""} value={g.remark} onChange={(e) => updateGuest(globalIdx, gIdx, 'remark', e.target.value)} />
+                                
+                                {/* 비고 영역 */}
+                                <input className="room-screen-input flex-1 min-w-[20px] text-slate-500 outline-none bg-transparent" style={{ fontSize: `${Math.max(9, fontSize - 1)}pt` }} placeholder={isSharedMode ? "(비고 입력)" : ""} value={g.remark} onChange={(e) => updateGuest(globalIdx, gIdx, 'remark', e.target.value)} />
+                                <div className="room-print-text flex-1 text-slate-500" style={{ fontSize: `${Math.max(9, fontSize - 1)}pt` }}>{g.remark || ' '}</div>
                             </div>
                             {isInternationalRooming && (
-                                <input className="font-bold tracking-wide text-slate-500 outline-none uppercase bg-transparent w-full mt-0.5 min-w-0" style={{ fontSize: `${Math.max(8, fontSize - 1.5)}pt` }} placeholder="ENGLISH NAME" value={g.engName} onChange={(e) => updateGuest(globalIdx, gIdx, 'engName', e.target.value)} />
+                                <React.Fragment>
+                                    <input className="room-screen-input font-bold tracking-wide text-slate-500 outline-none uppercase bg-transparent w-full mt-0.5 min-w-0" style={{ fontSize: `${Math.max(8, fontSize - 1.5)}pt` }} placeholder="ENGLISH NAME" value={g.engName} onChange={(e) => updateGuest(globalIdx, gIdx, 'engName', e.target.value)} />
+                                    <div className="room-print-text font-bold tracking-wide text-slate-500 uppercase w-full mt-0.5" style={{ fontSize: `${Math.max(8, fontSize - 1.5)}pt` }}>{g.engName || ' '}</div>
+                                </React.Fragment>
                             )}
                         </div>
                     ))}
@@ -656,20 +681,119 @@
             };
             const dragRoomEnd = (e) => { e.target.closest('.room-row')?.classList.remove('dragging'); dragRoomItem.current = null; dragOverRoomItem.current = null;};
 
-            const roomStats = useMemo(() => {
+            // v2.1 안정화 패치: 저장/제출/관리자 적용에 사용할 단일 데이터 정규화 로직 (GPT 제안 수용)
+            const ROOM_CAPACITY = { SINGLE: 1, TWIN: 2, TRIPLE: 3, QUAD: 4 };
+            const safeText = (v) => String(v ?? '').trim();
+            const normalizeGuest = (guest = {}) => ({
+                name: safeText(guest.name),
+                engName: safeText(guest.engName).toUpperCase(),
+                gender: guest.gender === '여' ? '여' : '남',
+                remark: safeText(guest.remark)
+            });
+            const normalizeRoom = (room = {}) => {
+                const type = ROOM_CAPACITY[room.type] ? room.type : 'TWIN';
+                const capacity = ROOM_CAPACITY[type];
+                let guests = Array.isArray(room.guests) ? room.guests.map(normalizeGuest) : [];
+                while (guests.length < capacity) guests.push({ name: '', engName: '', gender: '남', remark: '' });
+                guests = guests.slice(0, capacity);
+                return {
+                    id: room.id || Date.now() + Math.random(),
+                    type,
+                    roomNo: safeText(room.roomNo),
+                    guests
+                };
+            };
+            const sanitizeRooms = (targetRooms = rooms) => {
+                const normalized = (Array.isArray(targetRooms) ? targetRooms : []).map(normalizeRoom);
+                return normalized.length > 0 ? normalized : [{ id: Date.now(), type: 'TWIN', roomNo: '', guests: [{name:'', engName:'', gender:'남', remark:''}, {name:'', engName:'', gender:'남', remark:''}] }];
+            };
+            
+            const computeRoomStats = (targetRooms = rooms) => {
                 let total = 0, male = 0, female = 0;
                 let roomCounts = { SINGLE: 0, TWIN: 0, TRIPLE: 0, QUAD: 0 };
-                rooms.forEach(r => {
-                    if (r.guests.some(g => g.name.trim() !== "")) roomCounts[r.type]++;
+                sanitizeRooms(targetRooms).forEach(r => {
+                    const hasGuest = r.guests.some(g => safeText(g.name) !== '');
+                    if (hasGuest && roomCounts[r.type] !== undefined) roomCounts[r.type]++;
                     r.guests.forEach(g => {
-                        if (g.name.trim() !== "") {
+                        if (safeText(g.name) !== "") {
                             total++;
-                            if (g.gender === '남') male++; else female++;
+                            if (g.gender === '여') female++; else male++;
                         }
                     });
                 });
                 return { total, male, female, roomCounts };
-            }, [rooms]);
+            };
+            
+            const validateRoomingData = (targetRooms = rooms) => {
+                const normalizedRooms = sanitizeRooms(targetRooms);
+                const errors = [];
+                const warnings = [];
+                let namedGuestCount = 0;
+                const nameCounter = new Map();
+                normalizedRooms.forEach((room, rIdx) => {
+                    room.guests.forEach((guest, gIdx) => {
+                        if (!guest.name) return;
+                        namedGuestCount++;
+                        const key = `${guest.name}|${guest.engName}`;
+                        nameCounter.set(key, (nameCounter.get(key) || 0) + 1);
+                        if (isInternationalRooming && !guest.engName) {
+                            errors.push(`${rIdx + 1}번 객실 ${gIdx + 1}번째 인원의 영문명이 비어 있습니다.`);
+                        }
+                        if (isInternationalRooming && guest.engName.length > 28) {
+                            warnings.push(`${rIdx + 1}번 객실 ${guest.name} 영문명이 길어 인쇄 시 줄바꿈됩니다.`);
+                        }
+                    });
+                });
+                if (namedGuestCount === 0) errors.push('방 배정된 인원이 없습니다.');
+                for (const [key, count] of nameCounter.entries()) {
+                    const [name] = key.split('|');
+                    if (name && count > 1) warnings.push(`${name} 이름이 ${count}회 중복 배정되어 있습니다.`);
+                }
+                return { errors, warnings, rooms: normalizedRooms, stats: computeRoomStats(normalizedRooms) };
+            };
+            
+            const getStableEventCode = () => {
+                const current = safeText(commonHeader.eventCode).toUpperCase();
+                if (current) return current;
+                const nextCode = generateEventCode();
+                setCommonHeader(prev => ({ ...prev, eventCode: nextCode }));
+                return nextCode;
+            };
+            
+            const buildEventConfigPayload = (eventCode) => ({
+                eventCode,
+                commonHeader: { ...commonHeader, eventCode },
+                isInternationalRooming,
+                docFontSize,
+                rooms: sanitizeRooms(rooms),
+                stats: computeRoomStats(rooms),
+                updatedAt: new Date().toISOString(),
+                schemaVersion: 'tourmaker-rooming-v2.1'
+            });
+
+            // 고객 공유 링크 접속 시: 관리자 화면의 현재 단체명/일정/객실 템플릿을 먼저 불러온다. (GPT 제안 수용)
+            useEffect(() => {
+                if (!user || !db || !isSharedMode || !urlEventCode) return;
+                const loadSharedEventConfig = async () => {
+                    try {
+                        const { doc, getDoc } = window.FirebaseModules;
+                        const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooming_events', urlEventCode);
+                        const snap = await getDoc(eventRef);
+                        if (snap.exists()) {
+                            const config = snap.data();
+                            if (config.commonHeader) setCommonHeader(prev => ({ ...prev, ...config.commonHeader, eventCode: urlEventCode }));
+                            if (Array.isArray(config.rooms)) setRooms(sanitizeRooms(config.rooms));
+                            if (typeof config.isInternationalRooming === 'boolean') setIsInternationalRooming(config.isInternationalRooming);
+                            if (typeof config.docFontSize === 'number') setDocFontSize(config.docFontSize);
+                        }
+                    } catch (err) {
+                        console.error('Shared event config load error:', err);
+                    }
+                };
+                loadSharedEventConfig();
+            }, [user, db, isSharedMode, urlEventCode]);
+
+            const roomStats = useMemo(() => computeRoomStats(rooms), [rooms, isInternationalRooming]);
 
             const downloadRoomingExcelTemplate = () => {
                 const ws_data = [
@@ -923,15 +1047,26 @@
             const totalRoomPages = roomPages.length;
 
             // 시스템 기능들 (프린트 및 링크 복사 등)
-            const handleCopyLink = () => {
-                // Generate a code if empty
-                if(!commonHeader.eventCode) {
-                    setCommonHeader(prev => ({...prev, eventCode: generateEventCode()}));
-                }
-                const currentCode = commonHeader.eventCode || generateEventCode();
+            const handleCopyLink = async () => {
+                const currentCode = getStableEventCode();
                 const baseUrl = window.location.origin + window.location.pathname;
                 const shareUrl = `${baseUrl}?shared=true&code=${encodeURIComponent(currentCode)}`;
-                
+
+                try {
+                    if (!db || !user) {
+                        showAlert("⚠️ 서버 연결이 아직 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.");
+                        return;
+                    }
+                    const { doc, setDoc } = window.FirebaseModules;
+                    const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooming_events', currentCode);
+                    // 고객 공유 링크 클릭 시 관리자가 현재 보고있는 설정 그대로 전송(동기화)
+                    await setDoc(eventRef, buildEventConfigPayload(currentCode), { merge: true });
+                } catch (err) {
+                    console.error('Event config save error:', err);
+                    showAlert("⚠️ 공유 링크용 기본 데이터를 저장하지 못했습니다. Firebase 권한/네트워크를 확인해 주세요.");
+                    return;
+                }
+
                 fetch(`https://is.gd/create.php?format=json&url=${encodeURIComponent(shareUrl)}`)
                     .then(res => res.json())
                     .then(data => { executeCopy(data.shorturl || shareUrl); })
@@ -962,12 +1097,19 @@
             // [제출 시스템 로직] 
             // ==========================================
             const handleSubmitRooming = () => {
-                if(roomStats.total === 0) {
-                    showAlert("⚠️ 방 배정된 인원이 없습니다. 명단을 입력해주세요.");
+                const check = validateRoomingData(rooms);
+                if (check.errors.length > 0) {
+                    showAlert(`⚠️ 제출 전 확인이 필요합니다.\n\n${check.errors.join('\n')}`);
+                    return;
+                }
+                if (!db || !user) {
+                    showAlert("⚠️ 서버 연결이 아직 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.");
                     return;
                 }
 
-                showPrompt("마지막 단계입니다!\n담당자 확인을 위해 '단체명' 또는 '고객명'을 입력해 주세요.\n(예: 소속 기관명 또는 성함)", "", async (submitterName) => {
+                const warningText = check.warnings.length > 0 ? `\n\n참고 확인사항:\n${check.warnings.slice(0, 5).join('\n')}${check.warnings.length > 5 ? '\n...' : ''}` : '';
+
+                showPrompt(`마지막 단계입니다!\n담당자 확인을 위해 '단체명' 또는 '고객명'을 입력해 주세요.\n(예: 소속 기관명 또는 성함)${warningText}`, "", async (submitterName) => {
                     if(!submitterName || submitterName.trim() === "") {
                         showAlert("⚠️ 단체명 또는 고객명을 입력해야 제출이 가능합니다.");
                         return;
@@ -975,21 +1117,25 @@
 
                     try {
                         const { collection, addDoc } = window.FirebaseModules;
+                        const currentCode = getStableEventCode();
                         const subRef = collection(db, 'artifacts', appId, 'public', 'data', 'rooming_submissions');
-                        
+                        const normalizedRooms = sanitizeRooms(rooms);
+                        const normalizedStats = computeRoomStats(normalizedRooms);
                         await addDoc(subRef, {
-                            eventCode: commonHeader.eventCode,
+                            eventCode: currentCode,
                             groupName: commonHeader.groupName || '미지정 단체',
-                            submitterName: submitterName,
+                            submitterName: submitterName.trim(),
                             submittedAt: new Date().toISOString(),
-                            rooms: rooms,
-                            stats: roomStats
+                            commonHeader: { ...commonHeader, eventCode: currentCode },
+                            isInternationalRooming,
+                            rooms: normalizedRooms,
+                            stats: normalizedStats,
+                            schemaVersion: 'tourmaker-rooming-v2.1'
                         });
-                        
                         setSubmitSuccess(true);
                     } catch(err) {
                         console.error(err);
-                        showAlert("⚠️ 서버 통신 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+                        showAlert("⚠️ 서버 통신 중 오류가 발생했습니다. Firebase 권한 또는 네트워크 상태를 확인해 주세요.");
                     }
                 });
             };
@@ -1001,10 +1147,17 @@
                     message: `해당 배정본(${submission.submitterName} 제출)을 현재 화면에 덮어씌웁니다.\n기존 화면에 작성 중이던 내용은 사라집니다. 계속하시겠습니까?`,
                     inputValue: '',
                     onConfirm: () => {
-                        setRooms(submission.rooms);
+                        const loadedRooms = sanitizeRooms(submission.rooms || []);
+                        setRooms(loadedRooms);
+                        if (submission.commonHeader) {
+                            setCommonHeader(prev => ({ ...prev, ...submission.commonHeader, eventCode: submission.eventCode || prev.eventCode }));
+                        }
+                        if (typeof submission.isInternationalRooming === 'boolean') {
+                            setIsInternationalRooming(submission.isInternationalRooming);
+                        }
                         setActiveMainTab('rooming');
                         setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null, onChange: null }); 
-                        showAlert("✅ 성공적으로 배정본이 적용되었습니다!");
+                        showAlert("✅ 고객 제출본이 현재 화면에 적용되었습니다. PDF 인쇄 또는 엑셀 저장 전 한 번만 검수해 주세요.");
                     },
                     onCancel: () => { setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null, onChange: null }); }
                 });
