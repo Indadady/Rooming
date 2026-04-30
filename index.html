@@ -83,9 +83,9 @@
         
         .fixed-row-height { height: 36px; } 
 
-        /* ROOM NO 칸 너비 확장 (20% -> 28%) */
-        .room-grid { display: grid; grid-template-columns: 35px 8% 12% 1fr 28%; align-items: stretch; }
-        @media print { .room-grid { grid-template-columns: 8% 12% 1fr 28%; } }
+        /* ROOM NO 칸 및 전체 그리드 너비 최적화: 영문/한글 모두 조화로운 밸런스 */
+        .room-grid { display: grid; grid-template-columns: 35px 9% 13% 1fr 22%; align-items: stretch; }
+        @media print { .room-grid { grid-template-columns: 9% 13% 1fr 22%; } }
 
         .room-row input::placeholder { color: transparent !important; transition: color 0.2s ease-in-out; }
         .room-row:hover input::placeholder, .room-row input:focus::placeholder { color: #cbd5e1 !important; }
@@ -196,15 +196,15 @@
                 <div className="flex flex-col py-0.5 bg-white min-w-0 border-r border-slate-200 justify-center">
                     {room.guests.map((g, gIdx) => (
                         <div key={gIdx} className={`flex flex-col px-1.5 md:px-2 py-1 ${gIdx > 0 ? 'border-t border-dashed border-slate-200' : ''}`} style={{ padding: `${fontSize/2.5}px 4px` }}>
-                            <div className="flex items-center gap-1 md:gap-2 w-full">
-                                <input className="font-bold outline-none bg-transparent focus:text-blue-600" style={{ fontSize: `${fontSize}pt`, width: `${Math.max(70, fontSize * 6)}px` }} value={g.name} placeholder="이름" onChange={(e) => updateGuest(globalIdx, gIdx, 'name', e.target.value)} />
-                                <button type="button" onClick={() => updateGuest(globalIdx, gIdx, 'gender', g.gender === '남' ? '여' : '남')} className={`flex-shrink-0 font-bold px-1.5 py-0.5 rounded cursor-pointer ${g.gender === '여' ? 'bg-pink-50 text-pink-600' : 'bg-blue-50 text-blue-600'}`} style={{ fontSize: `${Math.max(8, fontSize - 2)}pt`, minWidth: '26px' }}>
+                            <div className="flex items-center gap-1 md:gap-2 w-full min-w-0">
+                                <input className="font-bold outline-none bg-transparent focus:text-blue-600 min-w-0 flex-shrink-0" style={{ fontSize: `${fontSize}pt`, width: `${Math.max(60, fontSize * 5)}px` }} value={g.name} placeholder="이름" onChange={(e) => updateGuest(globalIdx, gIdx, 'name', e.target.value)} />
+                                <button type="button" onClick={() => updateGuest(globalIdx, gIdx, 'gender', g.gender === '남' ? '여' : '남')} className={`flex-shrink-0 font-bold px-1.5 py-0.5 rounded cursor-pointer ${g.gender === '여' ? 'bg-pink-50 text-pink-600' : 'bg-blue-50 text-blue-600'}`} style={{ fontSize: `${Math.max(8, fontSize - 2)}pt`, minWidth: '24px' }}>
                                     {g.gender}
                                 </button>
                                 <input className="flex-1 min-w-[20px] text-slate-500 outline-none bg-transparent" style={{ fontSize: `${Math.max(9, fontSize - 1)}pt` }} placeholder={isSharedMode ? "(비고 입력)" : ""} value={g.remark} onChange={(e) => updateGuest(globalIdx, gIdx, 'remark', e.target.value)} />
                             </div>
                             {isInternationalRooming && (
-                                <input className="font-bold tracking-wide text-slate-500 outline-none uppercase bg-transparent w-full mt-0.5" style={{ fontSize: `${Math.max(8, fontSize - 1.5)}pt` }} placeholder="ENGLISH NAME" value={g.engName} onChange={(e) => updateGuest(globalIdx, gIdx, 'engName', e.target.value)} />
+                                <input className="font-bold tracking-wide text-slate-500 outline-none uppercase bg-transparent w-full mt-0.5 min-w-0" style={{ fontSize: `${Math.max(8, fontSize - 1.5)}pt` }} placeholder="ENGLISH NAME" value={g.engName} onChange={(e) => updateGuest(globalIdx, gIdx, 'engName', e.target.value)} />
                             )}
                         </div>
                     ))}
