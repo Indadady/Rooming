@@ -855,6 +855,90 @@
                 XLSX.writeFile(wb, "투어메이커_루밍표준양식.xlsx");
             };
 
+            // [루밍리스트 엑셀 업로드 로직 추가]
+            const importRoomingExcelData = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = new Uint8Array(event.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
+
+                        let currentRoom = null;
+                        const newRooms = [];
+                        let lastOrder = null;
+
+                        for (let i = 1; i < json.length; i++) {
+                            const row = json[i];
+                            if (!row || row.length === 0) continue;
+
+                            const orderStr = String(row[0] || '').trim();
+                            const nameStr = String(row[1] || '').trim();
+                            const engNameStr = String(row[2] || '').trim().toUpperCase();
+                            
+                            // 빈 줄이거나 시스템 푸터인 경우 건너뜀
+                            if (nameStr === '' && orderStr === '' && engNameStr === '') continue;
+                            if (nameStr.includes('System Powered') || String(row[4] || '').includes('System Powered')) continue;
+
+                            // 새로운 방 구별 조건: '순서'값이 존재하고 이전 순서와 다르거나, 아예 첫 시작일 때
+                            if (!currentRoom || (orderStr !== '' && orderStr !== lastOrder)) {
+                                if (currentRoom) newRooms.push(currentRoom);
+                                currentRoom = {
+                                    id: Date.now() + Math.random() + i,
+                                    roomNo: String(row[4] || '').trim(),
+                                    type: 'TWIN', // 임시 지정 (이후 재설정)
+                                    guests: []
+                                };
+                                if (orderStr !== '') lastOrder = orderStr;
+                            }
+
+                            // 빈 이름이 아니라면 게스트 추가
+                            if (nameStr !== '' || engNameStr !== '') {
+                                const finalEngName = engNameStr !== '' ? engNameStr : (isInternationalRooming ? koreanToEnglish(nameStr) : "");
+                                currentRoom.guests.push({
+                                    name: nameStr,
+                                    engName: finalEngName,
+                                    gender: String(row[3] || '').trim() === '여' || String(row[3] || '').trim().toUpperCase() === 'F' ? '여' : '남',
+                                    remark: String(row[5] || '').trim()
+                                });
+                            }
+                        }
+                        if (currentRoom && currentRoom.guests.length > 0) newRooms.push(currentRoom);
+
+                        // 타입(SGL, TWN, TRP, QUAD) 재계산 및 빈칸(Placeholder) 채우기
+                        const formattedRooms = newRooms.map(r => {
+                            let type = 'TWIN';
+                            const gLen = r.guests.length;
+                            if (gLen <= 1) type = 'SINGLE';
+                            else if (gLen === 2) type = 'TWIN';
+                            else if (gLen === 3) type = 'TRIPLE';
+                            else type = 'QUAD';
+
+                            const capacity = type === 'SINGLE' ? 1 : (type === 'TWIN' ? 2 : (type === 'TRIPLE' ? 3 : 4));
+                            const paddedGuests = [...r.guests];
+                            while(paddedGuests.length < capacity) paddedGuests.push({ name: "", engName: "", gender: "남", remark: "" });
+
+                            return { ...r, type, guests: paddedGuests.slice(0, capacity) };
+                        });
+
+                        if (formattedRooms.length > 0) {
+                            setRooms(formattedRooms);
+                            showAlert(`✅ 성공적으로 ${formattedRooms.length}개의 방 배정 데이터를 불러왔습니다.`);
+                        } else {
+                            showAlert("⚠️ 유효한 방 배정 데이터가 없습니다.");
+                        }
+                    } catch (error) { 
+                        showAlert("⚠️ 엑셀 파싱 오류가 발생했습니다. 양식을 확인해 주세요."); 
+                        console.error(error);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+                e.target.value = ''; // 동일 파일 재업로드 허용
+            };
+
             const exportRoomingToExcel = () => {
                 const ws_data = [['순서', '성명', '영문명(NAME)', '성별', '객실번호', '기타']];
                 const borders = []; 
@@ -1446,6 +1530,12 @@
                                                 <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded shadow-sm border border-emerald-400">
                                                     <button onClick={downloadRoomingExcelTemplate} className="text-[11px] md:text-xs font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 transition whitespace-nowrap" title="루밍 엑셀 양식 다운로드"><i className="fas fa-download"></i> 양식 다운</button>
                                                     <div className="w-[1px] h-3 bg-emerald-300"></div>
+                                                    
+                                                    {/* [NEW] 룸배정 엑셀 업로드 */}
+                                                    <label htmlFor="rooming-excel-upload" className="cursor-pointer text-[11px] md:text-xs font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 transition m-0 whitespace-nowrap"><i className="fas fa-upload"></i> 명단 업로드</label>
+                                                    <input type="file" id="rooming-excel-upload" accept=".xlsx, .xls" className="hidden" onChange={importRoomingExcelData} />
+                                                    <div className="w-[1px] h-3 bg-emerald-300"></div>
+                                                    
                                                     <button onClick={exportRoomingToExcel} className="text-[11px] md:text-xs font-black text-emerald-700 hover:text-emerald-900 flex items-center gap-1 transition whitespace-nowrap" title="방배정 엑셀로 내보내기"><i className="fas fa-file-excel"></i> 완성본 엑셀 저장</button>
                                                 </div>
                                             )}
