@@ -515,55 +515,57 @@
                 reader.onload = (event) => {
                     try {
                         const data = new Uint8Array(event.target.result);
-                        // [최종 안정화] cellDates 옵션을 아예 제거하여 JS Date 객체의 타임존 버그(-1일 밀림 현상) 원천 차단
-                        const workbook = XLSX.read(data, { type: 'array' });
+                        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                         const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
 
-                        const parseExcelDate = (cellVal) => {
-                            if (cellVal === undefined || cellVal === null || cellVal === "") return "";
-
-                            // 일반 숫자(텍스트로 강제된 경우 및 순수 엑셀 일련번호 포함) 처리
-                            if (typeof cellVal === 'number') {
-                                const numStr = String(cellVal);
-                                
-                                // YYMMDD(6자리) 또는 앞에 0이 빠진 생일(5자리) 검증
-                                if (numStr.length === 6 || (numStr.length === 5 && cellVal >= 10000 && cellVal <= 99999)) {
-                                    let padded = numStr.padStart(6, '0');
-                                    let m = parseInt(padded.substring(2, 4), 10);
-                                    let d = parseInt(padded.substring(4, 6), 10);
-                                    
-                                    // 월 1~12, 일 1~31 달력 검증으로 엑셀 일련번호와 충돌 차단
-                                    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-                                        let y = parseInt(padded.substring(0, 2), 10);
-                                        y += (y > 50 ? 1900 : 2000);
-                                        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                                    }
-                                }
-                                
-                                // 남은 숫자 중 일련번호 대역일 경우 엑셀 날짜로 변환 (JS Date 없이 수학적 연산만 수행)
-                                if (cellVal > 10000 && cellVal < 80000) {
-                                    const parsed = XLSX.SSF.parse_date_code(cellVal);
-                                    return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`;
-                                }
-                                return numStr;
+                        // [초격차 패치] 셀의 '보여지는 텍스트(w)'를 직접 추적하여 5자리 숫자 겹침 버그 완벽 해소
+                        const parseExcelDateCell = (cell) => {
+                            if (!cell || cell.v === undefined || cell.v === null || cell.v === "") return "";
+                            
+                            // 1. Date 객체로 정상 인식된 경우
+                            if (cell.v instanceof Date) {
+                                return `${cell.v.getFullYear()}-${String(cell.v.getMonth() + 1).padStart(2, '0')}-${String(cell.v.getDate()).padStart(2, '0')}`;
                             }
                             
-                            // 기존 문자열 형식 (2009-01-30, 090130 등) 파싱 처리
-                            let strVal = String(cellVal).trim();
-                            if (strVal.replace(/\s/g, '').match(/^\d{6}$/)) {
-                                let clean = strVal.replace(/\s/g, '');
-                                let y = parseInt(clean.substring(0, 2), 10);
-                                y += (y > 50 ? 1900 : 2000);
-                                return `${y}-${clean.substring(2, 4)}-${clean.substring(4, 6)}`;
-                            }
-                            strVal = strVal.replace(/\./g, '-').replace(/\//g, '-').replace(/,/g, '-').replace(/\s/g, '');
-                            const stdMatch = strVal.match(/^(\d{2,4})-(\d{1,2})-(\d{1,2})$/);
+                            // 2. 엑셀 화면에 표시되는 텍스트(w)를 최우선으로 분석
+                            let strVal = (cell.w || String(cell.v)).trim();
+                            
+                            // 표준 날짜 포맷 검증 (2009-11-02 등)
+                            let testStr = strVal.replace(/\./g, '-').replace(/\//g, '-').replace(/,/g, '-').replace(/년|월/g, '-').replace(/일/g, '').replace(/\s/g, '');
+                            const stdMatch = testStr.match(/^(\d{2,4})-(\d{1,2})-(\d{1,2})$/);
                             if (stdMatch) {
                                 let y = parseInt(stdMatch[1], 10);
                                 if (y < 100) y += (y > 50 ? 1900 : 2000);
                                 return `${y}-${String(stdMatch[2]).padStart(2, '0')}-${String(stdMatch[3]).padStart(2, '0')}`;
                             }
+                            
+                            // 8자리 숫자 (YYYYMMDD)
+                            if (strVal.match(/^\d{8}$/)) {
+                                let y = parseInt(strVal.substring(0, 4), 10);
+                                let m = parseInt(strVal.substring(4, 6), 10);
+                                let d = parseInt(strVal.substring(6, 8), 10);
+                                if (m >= 1 && m <= 12 && d >= 1 && d <= 31) return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                            }
+                            
+                            // 5~6자리 숫자 (YYMMDD)
+                            if (strVal.match(/^\d{5,6}$/)) {
+                                let padded = strVal.padStart(6, '0');
+                                let m = parseInt(padded.substring(2, 4), 10);
+                                let d = parseInt(padded.substring(4, 6), 10);
+                                if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+                                    let y = parseInt(padded.substring(0, 2), 10);
+                                    y += (y > 50 ? 1900 : 2000);
+                                    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                                }
+                            }
+                            
+                            // 최후의 보루: 표시형식 없는 순수 엑셀 일련번호
+                            if (typeof cell.v === 'number' && cell.v > 10000 && cell.v < 80000) {
+                                const parsed = XLSX.SSF.parse_date_code(cell.v);
+                                return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`;
+                            }
+                            
                             return strVal;
                         };
 
@@ -571,15 +573,20 @@
                         for (let i = 1; i < json.length; i++) {
                             const row = json[i];
                             if (!row || row.length === 0 || !row[1] || String(row[1]).trim() === '') continue;
+                            
+                            // 셀의 실제 포맷 정보를 가져오기 위해 직접 접근
+                            const cellBirth = worksheet[XLSX.utils.encode_cell({r: i, c: 3})]; // 4th column
+                            const cellExpiry = worksheet[XLSX.utils.encode_cell({r: i, c: 6})]; // 7th column
+
                             const rawGender = row[4] ? String(row[4]).toUpperCase().trim() : '';
                             newTravelers.push({
                                 id: Date.now() + Math.random() + i,
                                 nameKor: String(row[1]).trim(),
                                 nameEng: row[2] ? String(row[2]).toUpperCase().trim() : koreanToEnglish(String(row[1]).trim()),
-                                birth: parseExcelDate(row[3]),
+                                birth: parseExcelDateCell(cellBirth),
                                 gender: (rawGender === 'F' || rawGender === '여') ? 'F' : 'M',
                                 passportNo: row[5] ? String(row[5]).toUpperCase().trim() : "",
-                                expiry: parseExcelDate(row[6]),
+                                expiry: parseExcelDateCell(cellExpiry),
                                 nation: row[7] ? String(row[7]).toUpperCase().trim() : "KOR",
                                 remark: row[8] ? String(row[8]).trim() : ""
                             });
@@ -874,8 +881,8 @@
                 reader.onload = (event) => {
                     try {
                         const data = new Uint8Array(event.target.result);
-                        // [최종 안정화] cellDates 옵션 제거
-                        const workbook = XLSX.read(data, { type: 'array' });
+                        // [마스터 패치] cellDates: true 복구
+                        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                         const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
 
