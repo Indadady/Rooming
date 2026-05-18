@@ -523,9 +523,9 @@
                         const parseExcelDate = (cellVal) => {
                             if (cellVal === undefined || cellVal === null || cellVal === "") return "";
                             
-                            // 엑셀에서 날짜 서식으로 지정되어 파싱된 Date 객체 처리
+                            // 엑셀에서 날짜 서식으로 지정되어 파싱된 Date 객체 처리 (UTC 시간 충돌 방지: getFullYear 등 Local 메서드 사용)
                             if (cellVal instanceof Date) {
-                                return `${cellVal.getUTCFullYear()}-${String(cellVal.getUTCMonth() + 1).padStart(2, '0')}-${String(cellVal.getUTCDate()).padStart(2, '0')}`;
+                                return `${cellVal.getFullYear()}-${String(cellVal.getMonth() + 1).padStart(2, '0')}-${String(cellVal.getDate()).padStart(2, '0')}`;
                             }
 
                             // 일반 숫자(텍스트로 강제된 경우 등) 처리
@@ -546,10 +546,10 @@
                                     }
                                 }
                                 
-                                // 남은 5자리 숫자 중 일련번호 대역일 경우 엑셀 날짜로 변환 (서식이 풀린 경우 방어)
+                                // 남은 5자리 숫자 중 일련번호 대역일 경우 엑셀 날짜로 변환 (서식이 풀린 경우 방어) - SheetJS 내장 파서 사용으로 윤년/타임존 완벽 해결
                                 if (cellVal > 10000 && cellVal < 60000) {
-                                    const date_info = new Date(Math.floor(cellVal - 25569) * 86400 * 1000);
-                                    return `${date_info.getUTCFullYear()}-${String(date_info.getUTCMonth() + 1).padStart(2, '0')}-${String(date_info.getUTCDate()).padStart(2, '0')}`;
+                                    const parsed = XLSX.SSF.parse_date_code(cellVal);
+                                    return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`;
                                 }
                                 return numStr;
                             }
