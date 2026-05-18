@@ -25,7 +25,7 @@
     <!-- SheetJS with Styling -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 
-    <!-- Firebase Modules (Babel의 dynamic import 오류 우회) -->
+    <!-- Firebase Modules -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -50,7 +50,7 @@
                 box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; 
                 page-break-after: always; break-inside: avoid !important; 
                 display: flex !important; flex-direction: column !important; justify-content: space-between !important;
-                height: auto !important; min-height: 277mm !important; /* v2.1 패치: 강제 절단 해제 */
+                height: auto !important; min-height: 277mm !important;
                 overflow: visible !important; position: relative;
             }
             .print-page:last-child { page-break-after: auto; }
@@ -295,7 +295,6 @@
                             firebaseConfig = JSON.parse(__firebase_config);
                         } else {
                             // [중요!] 대표님 깃허브 배포용 실제 파이어베이스 설정 영역
-                            // Github Pages에 업로드 하실 때에는 아래 정보를 대표님의 Firebase 프로젝트 설정값으로 교체하셔야 데이터베이스 연동이 작동합니다!
                             firebaseConfig = {
                                 apiKey: "AIzaSyDPR8YwFV4CuGoaD7q4EVwNEalr4tjTWYY",
                                 authDomain: "tourmaker-rooming.firebaseapp.com",
@@ -516,26 +515,46 @@
                 reader.onload = (event) => {
                     try {
                         const data = new Uint8Array(event.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
+                        // [안정화 패치] cellDates: true 옵션으로 엑셀의 날짜 형식을 Date 객체로 파싱하도록 보장
+                        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                         const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
 
                         const parseExcelDate = (cellVal) => {
                             if (cellVal === undefined || cellVal === null || cellVal === "") return "";
+                            
+                            // 엑셀에서 날짜 서식으로 지정되어 파싱된 Date 객체 처리
+                            if (cellVal instanceof Date) {
+                                return `${cellVal.getUTCFullYear()}-${String(cellVal.getUTCMonth() + 1).padStart(2, '0')}-${String(cellVal.getUTCDate()).padStart(2, '0')}`;
+                            }
+
+                            // 일반 숫자(텍스트로 강제된 경우 등) 처리
                             if (typeof cellVal === 'number') {
                                 const numStr = String(cellVal);
+                                
+                                // YYMMDD(6자리) 또는 앞에 0이 빠진 생일(5자리) 검증
                                 if (numStr.length === 6 || (numStr.length === 5 && cellVal >= 10000 && cellVal <= 99999)) {
                                     let padded = numStr.padStart(6, '0');
-                                    let y = parseInt(padded.substring(0, 2), 10);
-                                    y += (y > 50 ? 1900 : 2000);
-                                    return `${y}-${padded.substring(2, 4)}-${padded.substring(4, 6)}`;
+                                    let m = parseInt(padded.substring(2, 4), 10);
+                                    let d = parseInt(padded.substring(4, 6), 10);
+                                    
+                                    // 월 1~12, 일 1~31 달력 검증으로 엑셀 일련번호와 충돌 차단
+                                    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+                                        let y = parseInt(padded.substring(0, 2), 10);
+                                        y += (y > 50 ? 1900 : 2000);
+                                        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                                    }
                                 }
+                                
+                                // 남은 5자리 숫자 중 일련번호 대역일 경우 엑셀 날짜로 변환 (서식이 풀린 경우 방어)
                                 if (cellVal > 10000 && cellVal < 60000) {
                                     const date_info = new Date(Math.floor(cellVal - 25569) * 86400 * 1000);
                                     return `${date_info.getUTCFullYear()}-${String(date_info.getUTCMonth() + 1).padStart(2, '0')}-${String(date_info.getUTCDate()).padStart(2, '0')}`;
                                 }
                                 return numStr;
                             }
+                            
+                            // 기존 문자열 형식 (2009-01-30, 090130 등) 파싱 처리
                             let strVal = String(cellVal).trim();
                             if (strVal.replace(/\s/g, '').match(/^\d{6}$/)) {
                                 let clean = strVal.replace(/\s/g, '');
@@ -575,7 +594,7 @@
                             setTravelers(newTravelers);
                             showAlert(`✅ 성공적으로 ${newTravelers.length}명의 명단 데이터를 불러왔습니다.`);
                         } else showAlert("⚠️ 유효한 데이터가 없습니다.");
-                    } catch (error) { showAlert("⚠️ 엑셀 파싱 오류가 발생했습니다."); }
+                    } catch (error) { showAlert("⚠️ 엑셀 파싱 오류가 발생했습니다."); console.error(error); }
                 };
                 reader.readAsArrayBuffer(file);
                 e.target.value = '';
@@ -681,7 +700,6 @@
             };
             const dragRoomEnd = (e) => { e.target.closest('.room-row')?.classList.remove('dragging'); dragRoomItem.current = null; dragOverRoomItem.current = null;};
 
-            // v2.1 안정화 패치: 저장/제출/관리자 적용에 사용할 단일 데이터 정규화 로직 (GPT 제안 수용)
             const ROOM_CAPACITY = { SINGLE: 1, TWIN: 2, TRIPLE: 3, QUAD: 4 };
             const safeText = (v) => String(v ?? '').trim();
             const normalizeGuest = (guest = {}) => ({
@@ -771,7 +789,6 @@
                 schemaVersion: 'tourmaker-rooming-v2.1'
             });
 
-            // 고객 공유 링크 접속 시: 관리자 화면의 현재 단체명/일정/객실 템플릿을 먼저 불러온다. (GPT 제안 수용)
             useEffect(() => {
                 if (!user || !db || !isSharedMode || !urlEventCode) return;
                 const loadSharedEventConfig = async () => {
@@ -855,7 +872,6 @@
                 XLSX.writeFile(wb, "투어메이커_루밍표준양식.xlsx");
             };
 
-            // [루밍리스트 엑셀 업로드 로직 추가]
             const importRoomingExcelData = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -863,7 +879,8 @@
                 reader.onload = (event) => {
                     try {
                         const data = new Uint8Array(event.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
+                        // [안정화 패치] cellDates: true 보장
+                        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                         const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
 
@@ -1090,11 +1107,9 @@
             const removeRoom = (globalIdx) => setRooms(prev => prev.filter((_, idx) => idx !== globalIdx));
             const addRoom = () => setRooms(prev => [...prev, { id: Date.now() + Math.random(), roomNo: '', type: 'TWIN', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }]);
 
-            // 스마트 페이징 (초정밀 가중치 알고리즘)
-            // 객실 타입(SGL, TWN, TRP)과 영문/한글 모드에 따른 실제 렌더링 높이를 단위(Unit)로 계산
             const getRoomWeight = (room) => {
-                const guestWeight = isInternationalRooming ? 2 : 1; // 영문 모드는 이름이 두 줄이므로 가중치 2배
-                const baseWeight = 3; // 각 방의 기본 여백 및 테두리 공간
+                const guestWeight = isInternationalRooming ? 2 : 1; 
+                const baseWeight = 3; 
                 return baseWeight + (room.guests.length * guestWeight);
             };
 
@@ -1104,8 +1119,6 @@
             let rpIdx = 0;
 
             while (currentRoomIndex < mappedRooms.length) {
-                // 1페이지는 상단 헤더 공간만큼 제한(60)
-                // 2페이지부터는 이전 간격 확장 패치로 인해 행 높이가 늘어난 것을 반영하여 86 -> 74로 보수적 하향 조정
                 let columnLimit = rpIdx === 0 ? 60 : 74;
                 
                 let bestN = 0;
@@ -1119,10 +1132,10 @@
                     if (lWeight <= columnLimit && rWeight <= columnLimit) {
                         bestN = n; 
                     } else {
-                        break; // 하나라도 한계치를 넘으면 멈추고 다음 페이지로 넘김
+                        break; 
                     }
                 }
-                if (bestN === 0) bestN = 1; // 무한루프 방지
+                if (bestN === 0) bestN = 1; 
                 
                 roomPages.push({ pageIndex: rpIdx, data: mappedRooms.slice(currentRoomIndex, currentRoomIndex + bestN) });
                 currentRoomIndex += bestN;
@@ -1130,7 +1143,6 @@
             }
             const totalRoomPages = roomPages.length;
 
-            // 시스템 기능들 (프린트 및 링크 복사 등)
             const handleCopyLink = async () => {
                 const currentCode = getStableEventCode();
                 const baseUrl = window.location.origin + window.location.pathname;
@@ -1143,7 +1155,6 @@
                     }
                     const { doc, setDoc } = window.FirebaseModules;
                     const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooming_events', currentCode);
-                    // 고객 공유 링크 클릭 시 관리자가 현재 보고있는 설정 그대로 전송(동기화)
                     await setDoc(eventRef, buildEventConfigPayload(currentCode), { merge: true });
                 } catch (err) {
                     console.error('Event config save error:', err);
@@ -1177,9 +1188,6 @@
                 }
             };
 
-            // ==========================================
-            // [제출 시스템 로직] 
-            // ==========================================
             const handleSubmitRooming = () => {
                 const check = validateRoomingData(rooms);
                 if (check.errors.length > 0) {
@@ -1247,7 +1255,6 @@
                 });
             };
 
-            // 제출된 개별 배정본 삭제 기능 (실무자용 정리 기능)
             const handleDeleteSubmission = (subId) => {
                 setModal({
                     isOpen: true,
