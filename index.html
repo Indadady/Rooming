@@ -515,20 +515,15 @@
                 reader.onload = (event) => {
                     try {
                         const data = new Uint8Array(event.target.result);
-                        // [안정화 패치] cellDates: true 옵션으로 엑셀의 날짜 형식을 Date 객체로 파싱하도록 보장
-                        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                        // [최종 안정화] cellDates 옵션을 아예 제거하여 JS Date 객체의 타임존 버그(-1일 밀림 현상) 원천 차단
+                        const workbook = XLSX.read(data, { type: 'array' });
                         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                         const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
 
                         const parseExcelDate = (cellVal) => {
                             if (cellVal === undefined || cellVal === null || cellVal === "") return "";
-                            
-                            // 엑셀에서 날짜 서식으로 지정되어 파싱된 Date 객체 처리 (UTC 시간 충돌 방지: getFullYear 등 Local 메서드 사용)
-                            if (cellVal instanceof Date) {
-                                return `${cellVal.getFullYear()}-${String(cellVal.getMonth() + 1).padStart(2, '0')}-${String(cellVal.getDate()).padStart(2, '0')}`;
-                            }
 
-                            // 일반 숫자(텍스트로 강제된 경우 등) 처리
+                            // 일반 숫자(텍스트로 강제된 경우 및 순수 엑셀 일련번호 포함) 처리
                             if (typeof cellVal === 'number') {
                                 const numStr = String(cellVal);
                                 
@@ -546,8 +541,8 @@
                                     }
                                 }
                                 
-                                // 남은 5자리 숫자 중 일련번호 대역일 경우 엑셀 날짜로 변환 (서식이 풀린 경우 방어) - SheetJS 내장 파서 사용으로 윤년/타임존 완벽 해결
-                                if (cellVal > 10000 && cellVal < 60000) {
+                                // 남은 숫자 중 일련번호 대역일 경우 엑셀 날짜로 변환 (JS Date 없이 수학적 연산만 수행)
+                                if (cellVal > 10000 && cellVal < 80000) {
                                     const parsed = XLSX.SSF.parse_date_code(cellVal);
                                     return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`;
                                 }
@@ -879,8 +874,8 @@
                 reader.onload = (event) => {
                     try {
                         const data = new Uint8Array(event.target.result);
-                        // [안정화 패치] cellDates: true 보장
-                        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                        // [최종 안정화] cellDates 옵션 제거
+                        const workbook = XLSX.read(data, { type: 'array' });
                         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                         const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
 
