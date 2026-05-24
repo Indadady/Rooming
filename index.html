@@ -61,8 +61,10 @@
             th { border-top: 2px solid #1e293b !important; border-bottom: 2px solid #1e293b !important; color: #1e293b !important; }
             .print-footer { margin-top: auto !important; page-break-inside: avoid; width: 100%; padding-top: 15px !important; background: white !important; }
             .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; display: flex !important; flex-direction: column !important; }
-            .room-row { padding: 0 !important; break-inside: avoid; border-bottom: 2px solid #1e293b !important; }
+            .room-row { padding: 0 !important; break-inside: avoid; page-break-inside: avoid !important; border-bottom: 2px solid #1e293b !important; }
             .room-guest-divider { border-top: none !important; padding-top: 2px !important; }
+            .rooming-print-compact .room-grid > div { padding-top: 4px !important; padding-bottom: 4px !important; }
+            .rooming-print-compact .room-row .flex-col { padding-top: 2px !important; padding-bottom: 2px !important; }
             input, select, textarea { border: none !important; background: transparent !important; appearance: none; -webkit-appearance: none; }
             input::placeholder, textarea::placeholder { color: transparent !important; }
 
@@ -136,6 +138,61 @@
         const TM_FOOTER_LOGO = "https://blogger.googleusercontent.com/img/a/AVvXsEitI-Z-hD82keOJ1AqHw-VTZjpw2U-O5UjtV9h3zblyG0wjsVfBWe9X9o0Q_Spctrt7krkd9qXO0xKTmGJLw4gyMZrRqpshKMFttnyx6OcC8-IGz3XLUZpGQOnRqVdol8jz5HuoDLqsEifnVRhcjUJHm13Sz8JrX9aPswMNUwZPvGtJEnQjhc2PiXlo-B8";
 
         const generateEventCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+
+        // 루밍 인쇄·페이지 분할 (최대 200명 / 대규모 단체 A4 안전 출력)
+        const ROOMING_MAX_PAX = 200;
+        const ROOMING_BASE_FONT = 10.5;
+        const ROOMING_LARGE_ROOM_THRESHOLD = 22;
+        const ROOMING_PAGE_FILL_SMALL = 0.92;
+        const ROOMING_PAGE_FILL_LARGE = 0.86;
+
+        const getRoomPrintWeight = (room, isInternational, fontSize) => {
+            const fontScale = fontSize / ROOMING_BASE_FONT;
+            const guestSlots = Math.max(1, Array.isArray(room.guests) ? room.guests.length : 2);
+            const hasLongEngName = isInternational && room.guests.some(g => String(g.engName || '').trim().length > 18);
+            const lineWeight = isInternational ? 2.15 : 1.05;
+            const overhead = 1.25;
+            return (overhead + guestSlots * lineWeight + (hasLongEngName ? 0.6 : 0)) * fontScale;
+        };
+
+        const getRoomColumnLimit = (pageIdx, isInternational, fontSize, isLargeGroup) => {
+            const fontScale = fontSize / ROOMING_BASE_FONT;
+            const intlFactor = isInternational ? 0.9 : 1;
+            const firstBase = isLargeGroup ? 46 : 58;
+            const nextBase = isLargeGroup ? 56 : 70;
+            const baseLimit = pageIdx === 0 ? firstBase : nextBase;
+            return (baseLimit * intlFactor) / fontScale;
+        };
+
+        const buildRoomPages = (normalizedRooms, isInternational, fontSize) => {
+            const mappedRooms = normalizedRooms.map((r, idx) => ({ room: r, actualIdx: idx + 1, globalIdx: idx }));
+            const isLargeGroup = mappedRooms.length > ROOMING_LARGE_ROOM_THRESHOLD;
+            const fillTarget = isLargeGroup ? ROOMING_PAGE_FILL_LARGE : ROOMING_PAGE_FILL_SMALL;
+            const roomPages = [];
+            let currentRoomIndex = 0;
+            let rpIdx = 0;
+
+            while (currentRoomIndex < mappedRooms.length) {
+                const columnLimit = getRoomColumnLimit(rpIdx, isInternational, fontSize, isLargeGroup) * fillTarget;
+                let bestN = 0;
+
+                for (let n = 1; n <= mappedRooms.length - currentRoomIndex; n++) {
+                    const testRooms = mappedRooms.slice(currentRoomIndex, currentRoomIndex + n);
+                    const half = Math.ceil(testRooms.length / 2);
+                    const lWeight = testRooms.slice(0, half).reduce((sum, r) => sum + getRoomPrintWeight(r.room, isInternational, fontSize), 0);
+                    const rWeight = testRooms.slice(half).reduce((sum, r) => sum + getRoomPrintWeight(r.room, isInternational, fontSize), 0);
+                    if (lWeight <= columnLimit && rWeight <= columnLimit) bestN = n;
+                    else break;
+                }
+                if (bestN === 0) bestN = 1;
+
+                roomPages.push({ pageIndex: rpIdx, data: mappedRooms.slice(currentRoomIndex, currentRoomIndex + bestN) });
+                currentRoomIndex += bestN;
+                rpIdx++;
+            }
+
+            return { roomPages, totalRoomPages: roomPages.length, isLargeGroup };
+        };
 
         const getRomanization = (char) => {
             const CHO = ["G","KK","N","D","TT","R","M","B","PP","S","SS","","J","JJ","CH","K","T","P","H"];
@@ -783,6 +840,11 @@
                     });
                 });
                 if (namedGuestCount === 0) errors.push('방 배정된 인원이 없습니다.');
+                if (namedGuestCount > ROOMING_MAX_PAX) {
+                    errors.push(`배정 인원이 ${ROOMING_MAX_PAX}명을 초과했습니다. (현재 ${namedGuestCount}명)`);
+                } else if (namedGuestCount > 150) {
+                    warnings.push(`대규모 단체(${namedGuestCount}명)입니다. 인쇄 시 여러 페이지로 나뉘며, 미리보기로 확인해 주세요.`);
+                }
                 for (const [key, count] of nameCounter.entries()) {
                     const [name] = key.split('|');
                     if (name && count > 1) warnings.push(`${name} 이름이 ${count}회 중복 배정되어 있습니다.`);
@@ -806,7 +868,7 @@
                 rooms: sanitizeRooms(rooms),
                 stats: computeRoomStats(rooms),
                 updatedAt: new Date().toISOString(),
-                schemaVersion: 'tourmaker-rooming-v2.1'
+                schemaVersion: 'tourmaker-rooming-v2.2'
             });
 
             useEffect(() => {
@@ -831,6 +893,10 @@
             }, [user, db, isSharedMode, urlEventCode]);
 
             const roomStats = useMemo(() => computeRoomStats(rooms), [rooms, isInternationalRooming]);
+
+            const { roomPages, totalRoomPages, isLargeGroup: isLargeRoomingGroup } = useMemo(() => {
+                return buildRoomPages(sanitizeRooms(rooms), isInternationalRooming, docFontSize);
+            }, [rooms, isInternationalRooming, docFontSize]);
 
             const downloadRoomingExcelTemplate = () => {
                 const ws_data = [
@@ -998,8 +1064,16 @@
 
                         if (formattedRooms.length > 0) {
                             const guestTotal = formattedRooms.reduce((sum, r) => sum + r.guests.filter(g => safeText(g.name) !== '').length, 0);
+                            if (guestTotal > ROOMING_MAX_PAX) {
+                                showAlert(`⚠️ 배정 인원이 ${ROOMING_MAX_PAX}명을 초과합니다. (현재 ${guestTotal}명)\n${ROOMING_MAX_PAX}명 이하로 조정 후 다시 업로드해 주세요.`);
+                                e.target.value = '';
+                                return;
+                            }
                             setRooms(formattedRooms);
-                            showAlert(`✅ 엑셀 반영 완료\n· 객실: ${formattedRooms.length}개\n· 배정 인원: ${guestTotal}명\n\n※ 수정 전 16객실 데이터가 보이면, 공유 링크를 다시 복사해 Firebase에도 저장해 주세요.`);
+                            const pagePreview = buildRoomPages(formattedRooms, isInternationalRooming, docFontSize);
+                            const pageNote = pagePreview.totalRoomPages > 1 ? `\n· 인쇄 예상: ${pagePreview.totalRoomPages}페이지` : '';
+                            const largeNote = guestTotal > 150 ? '\n\n※ 대규모 단체입니다. PDF 인쇄 미리보기로 페이지별 확인을 권장합니다.' : '';
+                            showAlert(`✅ 엑셀 반영 완료\n· 객실: ${formattedRooms.length}개\n· 배정 인원: ${guestTotal}명${pageNote}${largeNote}`);
                         } else {
                             showAlert("⚠️ 유효한 방 배정 데이터가 없습니다.\n(순번만 남고 이름이 모두 삭제된 행은 무시됩니다.)");
                         }
@@ -1179,42 +1253,6 @@
                 });
             };
 
-            const getRoomWeight = (room) => {
-                const guestWeight = isInternationalRooming ? 2 : 1; 
-                const baseWeight = 3; 
-                return baseWeight + (room.guests.length * guestWeight);
-            };
-
-            const mappedRooms = rooms.map((r, idx) => ({ room: r, actualIdx: idx + 1, globalIdx: idx }));
-            const roomPages = [];
-            let currentRoomIndex = 0;
-            let rpIdx = 0;
-
-            while (currentRoomIndex < mappedRooms.length) {
-                let columnLimit = rpIdx === 0 ? 60 : 74;
-                
-                let bestN = 0;
-                for (let n = 1; n <= mappedRooms.length - currentRoomIndex; n++) {
-                    let testRooms = mappedRooms.slice(currentRoomIndex, currentRoomIndex + n);
-                    let half = Math.ceil(testRooms.length / 2);
-                    
-                    let lWeight = testRooms.slice(0, half).reduce((sum, r) => sum + getRoomWeight(r.room), 0);
-                    let rWeight = testRooms.slice(half).reduce((sum, r) => sum + getRoomWeight(r.room), 0);
-                    
-                    if (lWeight <= columnLimit && rWeight <= columnLimit) {
-                        bestN = n; 
-                    } else {
-                        break; 
-                    }
-                }
-                if (bestN === 0) bestN = 1; 
-                
-                roomPages.push({ pageIndex: rpIdx, data: mappedRooms.slice(currentRoomIndex, currentRoomIndex + bestN) });
-                currentRoomIndex += bestN;
-                rpIdx++;
-            }
-            const totalRoomPages = roomPages.length;
-
             const handleCopyLink = async () => {
                 const currentCode = getStableEventCode();
                 const baseUrl = window.location.origin + window.location.pathname;
@@ -1294,7 +1332,7 @@
                             isInternationalRooming,
                             rooms: normalizedRooms,
                             stats: normalizedStats,
-                            schemaVersion: 'tourmaker-rooming-v2.1'
+                            schemaVersion: 'tourmaker-rooming-v2.2'
                         });
                         setSubmitSuccess(true);
                     } catch(err) {
@@ -1572,7 +1610,7 @@
                         {/* TAB 2: 방 배정 (루밍리스트) / 고객 작성 화면 */}
                         {/* ========================================================================= */}
                         <div className={activeMainTab === 'rooming' ? 'block' : 'hidden'}>
-                            <div className="w-full max-w-full xl:max-w-[1400px] mx-auto p-0 sm:p-4 md:p-6 print-rooming-list">
+                            <div className={`w-full max-w-full xl:max-w-[1400px] mx-auto p-0 sm:p-4 md:p-6 print-rooming-list ${isLargeRoomingGroup || totalRoomPages >= 4 ? 'rooming-print-compact' : ''}`}>
                                 <div className="no-print mb-4 md:mb-6">
                                     
                                     {/* 공유 모드일 때만 보이는 상단 알림 및 제출 영역 */}
@@ -1599,7 +1637,7 @@
                                                 <button onClick={() => setIsInternationalRooming(true)} className={`flex-1 sm:flex-none px-3 py-1.5 rounded text-xs md:text-sm font-bold transition ${isInternationalRooming ? 'bg-blue-50 text-blue-600' : 'text-slate-500'}`}>해외행사(영문)</button>
                                             </div>
                                             <p className="text-[11px] md:text-xs text-blue-800 font-bold leading-relaxed ml-1 hidden lg:block">
-                                                <i className="fas fa-lightbulb text-amber-500 mr-1"></i> 텍스트를 복사해 붙여넣으면 시스템이 알아서 배치합니다.
+                                                <i className="fas fa-lightbulb text-amber-500 mr-1"></i> 텍스트를 복사해 붙여넣으면 시스템이 알아서 배치합니다. (최대 {ROOMING_MAX_PAX}명 · 인쇄 {totalRoomPages}페이지 예상)
                                             </p>
                                         </div>
                                         
@@ -1668,7 +1706,7 @@
                                         const rightTableRooms = pageRooms.slice(halfCount);
 
                                         return (
-                                            <div key={pageIndex} className={`print-page box-border overflow-hidden bg-white shadow-xl p-3 sm:p-5 md:p-8 border-t-[4px] md:border-t-[6px] border-slate-800 print:shadow-none print:p-0 print:border-none print:m-0 relative flex flex-col justify-between`} style={{ minHeight: '277mm', fontSize: `${docFontSize}pt` }}>
+                                            <div key={pageIndex} className={`print-page box-border overflow-hidden print:overflow-visible bg-white shadow-xl p-3 sm:p-5 md:p-8 border-t-[4px] md:border-t-[6px] border-slate-800 print:shadow-none print:p-0 print:border-none print:m-0 relative flex flex-col justify-between`} style={{ minHeight: '277mm', fontSize: `${docFontSize}pt` }}>
                                                 <div className="flex-1 flex flex-col w-full box-border">
                                                     
                                                     {isFirstPage ? (
@@ -1685,6 +1723,9 @@
                                                                         <div className="font-bold text-slate-800 flex-1 flex flex-row items-center gap-2 md:gap-3 px-1 md:px-2 whitespace-nowrap overflow-hidden" style={{ fontSize: `${docFontSize}pt` }}>
                                                                             <div className="flex items-center gap-1.5 md:gap-2">
                                                                                 <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">배정 인원: <span className="text-blue-600">{roomStats.total}</span>명</span>
+                                                                                {totalRoomPages > 1 && (
+                                                                                    <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200">인쇄 {totalRoomPages}페이지</span>
+                                                                                )}
                                                                             </div>
                                                                             <div className="flex items-center gap-1.5 hidden sm:flex">
                                                                                 <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200">TWN: {roomStats.roomCounts.TWIN}</span>
@@ -1701,8 +1742,9 @@
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        <div className="flex justify-end items-center pb-2 mb-2 w-full box-border border-b border-transparent">
-                                                            <div className="text-slate-500 font-bold" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>Page {pageIndex + 1} / {totalRoomPages}</div>
+                                                        <div className="flex justify-between items-center pb-2 mb-2 w-full box-border border-b border-slate-300">
+                                                            <div className="font-bold text-slate-700 truncate pr-3" style={{ fontSize: `${Math.max(9, docFontSize - 1)}pt` }}>{commonHeader.groupName || 'ROOMING LIST'}</div>
+                                                            <div className="text-slate-500 font-bold flex-shrink-0" style={{ fontSize: `${Math.max(8, docFontSize - 2)}pt` }}>Page {pageIndex + 1} / {totalRoomPages}</div>
                                                         </div>
                                                     )}
 
