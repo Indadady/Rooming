@@ -61,7 +61,8 @@
             th { border-top: 2px solid #1e293b !important; border-bottom: 2px solid #1e293b !important; color: #1e293b !important; }
             .print-footer { margin-top: auto !important; page-break-inside: avoid; width: 100%; padding-top: 15px !important; background: white !important; }
             .print-rooming-list { box-shadow: none !important; padding: 0 !important; border: none !important; margin: 0 !important; display: flex !important; flex-direction: column !important; }
-            .room-row { padding: 0 !important; break-inside: avoid; }
+            .room-row { padding: 0 !important; break-inside: avoid; border-bottom: 2px solid #1e293b !important; }
+            .room-guest-divider { border-top: none !important; padding-top: 2px !important; }
             input, select, textarea { border: none !important; background: transparent !important; appearance: none; -webkit-appearance: none; }
             input::placeholder, textarea::placeholder { color: transparent !important; }
 
@@ -112,6 +113,9 @@
 
         .room-no-input { letter-spacing: -0.02em; line-height: 1.1 !important; }
         .room-no-print { font-weight: 900; word-break: break-all; }
+
+        /* 화면: 같은 객실 내 동숙자 구분(점선) / 인쇄: 점선 숨김 → 객실 구분선만 강조 */
+        .room-guest-divider { border-top: 1px dashed #e2e8f0; }
 
         .room-row input::placeholder { color: transparent !important; transition: color 0.2s ease-in-out; }
         .room-row:hover input::placeholder, .room-row input:focus::placeholder { color: #cbd5e1 !important; }
@@ -198,7 +202,7 @@
             const roomNoFontSize = Math.round(fontSize * 3 * 10) / 10;
             return (
             <div
-                className="room-row room-grid group relative bg-white w-full h-full border-b border-slate-300 last:border-b-0 print:border-b box-border"
+                className="room-row room-grid group relative bg-white w-full h-full border-b-2 border-slate-300 box-border"
                 style={{ breakInside: 'avoid' }}
                 draggable={!isSharedMode}
                 onDragStart={!isSharedMode ? (e) => dragRoomStart(e, globalIdx) : undefined}
@@ -223,7 +227,7 @@
 
                 <div className="flex flex-col py-0.5 bg-white min-w-0 border-r border-slate-200 justify-center">
                     {room.guests.map((g, gIdx) => (
-                        <div key={gIdx} className={`flex flex-col px-1.5 md:px-2 py-1 ${gIdx > 0 ? 'border-t border-dashed border-slate-200' : ''}`} style={{ padding: `${fontSize/2.5}px 4px` }}>
+                        <div key={gIdx} className={`flex flex-col px-1.5 md:px-2 py-1 ${gIdx > 0 ? 'room-guest-divider' : ''}`} style={{ padding: `${fontSize/2.5}px 4px` }}>
                             <div className="flex items-center gap-1 md:gap-2 w-full min-w-0">
                                 {/* 웹 화면용 입력 필드 */}
                                 <input className="room-screen-input font-bold outline-none bg-transparent focus:text-blue-600 min-w-0 flex-shrink-0" style={{ fontSize: `${fontSize}pt`, width: `${Math.max(60, fontSize * 5)}px` }} value={g.name} placeholder="이름" onChange={(e) => updateGuest(globalIdx, gIdx, 'name', e.target.value)} />
@@ -1742,7 +1746,7 @@
                                                                                 {rightData ? (
                                                                                     <RoomRow room={rightData.room} actualIdx={rightData.actualIdx} globalIdx={rightData.globalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} isSharedMode={isSharedMode}/>
                                                                                 ) : (
-                                                                                    <div className="w-full h-full bg-white border-b border-slate-300 last:border-b-0 print:border-b box-border"></div>
+                                                                                    <div className="w-full h-full bg-white border-b-2 border-slate-300 box-border"></div>
                                                                                 )}
                                                                             </div>
                                                                         </div>
