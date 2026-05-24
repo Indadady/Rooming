@@ -107,8 +107,11 @@
         .fixed-row-height { height: 36px; } 
 
         /* ROOM NO 칸 및 전체 그리드 너비 최적화: 가로 밀림 원천 차단 (minmax 적용) */
-        .room-grid { display: grid; grid-template-columns: 35px 8% 11% minmax(0, 1fr) 28%; align-items: stretch; width: 100%; box-sizing: border-box; overflow: hidden; }
-        @media print { .room-grid { grid-template-columns: 8% 11% minmax(0, 1fr) 28%; width: 100%; } }
+        .room-grid { display: grid; grid-template-columns: 35px 8% 11% minmax(0, 1fr) 32%; align-items: stretch; width: 100%; box-sizing: border-box; overflow: hidden; }
+        @media print { .room-grid { grid-template-columns: 8% 11% minmax(0, 1fr) 32%; width: 100%; } }
+
+        .room-no-input { letter-spacing: -0.02em; line-height: 1.1 !important; }
+        .room-no-print { font-weight: 900; word-break: break-all; }
 
         .room-row input::placeholder { color: transparent !important; transition: color 0.2s ease-in-out; }
         .room-row:hover input::placeholder, .room-row input:focus::placeholder { color: #cbd5e1 !important; }
@@ -191,7 +194,9 @@
             />
         );
 
-        const RoomRow = ({ room, actualIdx, globalIdx, updateRoom, updateGuest, changeRoomType, removeRoom, dragRoomStart, dragRoomEnter, dragRoomEnd, dropRoom, fontSize, isInternationalRooming, isSharedMode }) => (
+        const RoomRow = ({ room, actualIdx, globalIdx, updateRoom, updateGuest, changeRoomType, removeRoom, dragRoomStart, dragRoomEnter, dragRoomEnd, dropRoom, fontSize, isInternationalRooming, isSharedMode }) => {
+            const roomNoFontSize = Math.round(fontSize * 3 * 10) / 10;
+            return (
             <div
                 className="room-row room-grid group relative bg-white w-full h-full border-b border-slate-300 last:border-b-0 print:border-b box-border"
                 style={{ breakInside: 'avoid' }}
@@ -244,11 +249,13 @@
                 </div>
 
                 <div className="flex items-center justify-center p-1 bg-white min-w-0 relative">
-                    <input className="w-full text-center font-bold text-slate-600 bg-transparent outline-none" style={{ fontSize: `${fontSize}pt` }} placeholder="추후 배정" value={room.roomNo} onChange={(e) => updateRoom(globalIdx, 'roomNo', e.target.value)} />
+                    <input className="room-screen-input room-no-input w-full text-center font-black text-slate-700 bg-transparent outline-none focus:text-blue-700" style={{ fontSize: `${roomNoFontSize}pt` }} placeholder="추후 배정" value={room.roomNo} onChange={(e) => updateRoom(globalIdx, 'roomNo', e.target.value)} />
+                    <div className="room-print-text room-no-print text-center w-full text-slate-800" style={{ fontSize: `${roomNoFontSize}pt` }}>{room.roomNo || ' '}</div>
                     <button type="button" onClick={() => removeRoom(globalIdx)} className="no-print absolute -right-3 top-1/2 -translate-y-1/2 p-1.5 bg-white border border-slate-200 rounded-full text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 z-10 shadow-sm"><i className="fas fa-trash-alt" style={{ fontSize: `${Math.max(8, fontSize - 2)}pt` }}></i></button>
                 </div>
             </div>
-        );
+            );
+        };
 
         // 메인 컴포넌트
         const App = () => {
