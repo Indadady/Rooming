@@ -676,9 +676,16 @@
             // [TAB 2] 방 배정 (루밍리스트)
             // ==========================================
             const [isInternationalRooming, setIsInternationalRooming] = useState(true);
-            const [rooms, setRooms] = useState([
-                { id: 1, type: 'TWIN', roomNo: '', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }
-            ]);
+            const createDefaultRooms = () => ([{
+                id: Date.now() + Math.random(),
+                type: 'TWIN',
+                roomNo: '',
+                guests: [
+                    { name: '', engName: '', gender: '남', remark: '' },
+                    { name: '', engName: '', gender: '남', remark: '' }
+                ]
+            }]);
+            const [rooms, setRooms] = useState(createDefaultRooms);
             const [importTextRooming, setImportTextRooming] = useState("");
 
             const dragRoomItem = useRef();
@@ -874,6 +881,31 @@
                 XLSX.writeFile(wb, "투어메이커_루밍표준양식.xlsx");
             };
 
+            const getWorksheetCellText = (worksheet, rowIdx, colIdx) => {
+                const merges = worksheet['!merges'] || [];
+                for (const merge of merges) {
+                    if (rowIdx >= merge.s.r && rowIdx <= merge.e.r && colIdx >= merge.s.c && colIdx <= merge.e.c) {
+                        const originAddr = XLSX.utils.encode_cell({ r: merge.s.r, c: merge.s.c });
+                        const originCell = worksheet[originAddr];
+                        if (originCell == null) return '';
+                        return String(originCell.w ?? originCell.v ?? '').trim();
+                    }
+                }
+                const addr = XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
+                const cell = worksheet[addr];
+                if (cell == null) return '';
+                return String(cell.w ?? cell.v ?? '').trim();
+            };
+
+            const roomHasNamedGuest = (room) => {
+                if (!room || !Array.isArray(room.guests)) return false;
+                return room.guests.some(g => safeText(g.name) !== '' || safeText(g.engName) !== '');
+            };
+
+            const pushParsedRoom = (targetRooms, room) => {
+                if (roomHasNamedGuest(room)) targetRooms.push(room);
+            };
+
             const importRoomingExcelData = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -894,28 +926,38 @@
                             const row = json[i];
                             if (!row || row.length === 0) continue;
 
-                            const orderStr = String(row[0] || '').trim();
+                            // 병합 셀(순번·객실번호) 값 보정 — 엑셀 수정 후에도 원본 그룹 유지
+                            const orderStr = getWorksheetCellText(worksheet, i, 0) || String(row[0] || '').trim();
+                            const roomNoStr = getWorksheetCellText(worksheet, i, 4) || String(row[4] || '').trim();
                             const nameStr = String(row[1] || '').trim();
                             const engNameStr = String(row[2] || '').trim().toUpperCase();
                             
                             // 빈 줄이거나 시스템 푸터인 경우 건너뜀
-                            if (nameStr === '' && orderStr === '' && engNameStr === '') continue;
-                            if (nameStr.includes('System Powered') || String(row[4] || '').includes('System Powered')) continue;
+                            if (nameStr === '' && orderStr === '' && engNameStr === '' && roomNoStr === '') continue;
+                            if (nameStr.includes('System Powered') || roomNoStr.includes('System Powered')) continue;
 
-                            // 새로운 방 구별 조건: '순서'값이 존재하고 이전 순서와 다르거나, 아예 첫 시작일 때
-                            if (!currentRoom || (orderStr !== '' && orderStr !== lastOrder)) {
-                                if (currentRoom) newRooms.push(currentRoom);
+                            const hasGuestData = nameStr !== '' || engNameStr !== '';
+                            const isNewRoomGroup = !currentRoom || (orderStr !== '' && orderStr !== lastOrder);
+
+                            // 순번만 남고 인원이 삭제된 행(빈 객실 잔재)은 새 방으로 만들지 않음
+                            if (isNewRoomGroup && hasGuestData) {
+                                pushParsedRoom(newRooms, currentRoom);
                                 currentRoom = {
                                     id: Date.now() + Math.random() + i,
-                                    roomNo: String(row[4] || '').trim(),
-                                    type: 'TWIN', // 임시 지정 (이후 재설정)
+                                    roomNo: roomNoStr,
+                                    type: 'TWIN',
                                     guests: []
                                 };
                                 if (orderStr !== '') lastOrder = orderStr;
+                            } else if (isNewRoomGroup && !hasGuestData) {
+                                continue;
                             }
 
-                            // 빈 이름이 아니라면 게스트 추가
-                            if (nameStr !== '' || engNameStr !== '') {
+                            if (!currentRoom) continue;
+
+                            if (roomNoStr && !currentRoom.roomNo) currentRoom.roomNo = roomNoStr;
+
+                            if (hasGuestData) {
                                 const finalEngName = engNameStr !== '' ? engNameStr : (isInternationalRooming ? koreanToEnglish(nameStr) : "");
                                 currentRoom.guests.push({
                                     name: nameStr,
@@ -925,7 +967,7 @@
                                 });
                             }
                         }
-                        if (currentRoom && currentRoom.guests.length > 0) newRooms.push(currentRoom);
+                        pushParsedRoom(newRooms, currentRoom);
 
                         // 타입(SGL, TWN, TRP, QUAD) 재계산 및 빈칸(Placeholder) 채우기
                         const formattedRooms = newRooms.map(r => {
@@ -944,10 +986,11 @@
                         });
 
                         if (formattedRooms.length > 0) {
+                            const guestTotal = formattedRooms.reduce((sum, r) => sum + r.guests.filter(g => safeText(g.name) !== '').length, 0);
                             setRooms(formattedRooms);
-                            showAlert(`✅ 성공적으로 ${formattedRooms.length}개의 방 배정 데이터를 불러왔습니다.`);
+                            showAlert(`✅ 엑셀 반영 완료\n· 객실: ${formattedRooms.length}개\n· 배정 인원: ${guestTotal}명\n\n※ 수정 전 16객실 데이터가 보이면, 공유 링크를 다시 복사해 Firebase에도 저장해 주세요.`);
                         } else {
-                            showAlert("⚠️ 유효한 방 배정 데이터가 없습니다.");
+                            showAlert("⚠️ 유효한 방 배정 데이터가 없습니다.\n(순번만 남고 이름이 모두 삭제된 행은 무시됩니다.)");
                         }
                     } catch (error) { 
                         showAlert("⚠️ 엑셀 파싱 오류가 발생했습니다. 양식을 확인해 주세요."); 
@@ -1108,6 +1151,22 @@
 
             const removeRoom = (globalIdx) => setRooms(prev => prev.filter((_, idx) => idx !== globalIdx));
             const addRoom = () => setRooms(prev => [...prev, { id: Date.now() + Math.random(), roomNo: '', type: 'TWIN', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }]);
+
+            const handleResetRooming = () => {
+                setModal({
+                    isOpen: true,
+                    type: 'confirm',
+                    message: '방 배정을 모두 초기화할까요?\n\n· 현재 객실·인원 배정이 삭제됩니다.\n· 복붙 입력창 내용도 함께 지워집니다.\n· 빈 TWIN 1실 상태로 돌아갑니다.',
+                    inputValue: '',
+                    onConfirm: () => {
+                        setRooms(createDefaultRooms());
+                        setImportTextRooming('');
+                        setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null, onChange: null });
+                        showAlert('✅ 방 배정이 초기화되었습니다.');
+                    },
+                    onCancel: () => { setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null, onChange: null }); }
+                });
+            };
 
             const getRoomWeight = (room) => {
                 const guestWeight = isInternationalRooming ? 2 : 1; 
@@ -1555,6 +1614,9 @@
                                                 <span className="text-xs font-bold text-blue-600 w-10 text-center">{docFontSize}pt</span>
                                                 <button onClick={() => setDocFontSize(Math.min(16, docFontSize + 0.5))} className="w-5 h-5 flex justify-center items-center bg-slate-100 hover:bg-slate-200 rounded text-slate-600 font-bold">+</button>
                                             </div>
+                                            <button onClick={handleResetRooming} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 px-3 py-1.5 rounded text-[11px] md:text-xs font-bold transition shadow-sm whitespace-nowrap" title="방 배정 전체 초기화">
+                                                <i className="fas fa-rotate-left mr-1"></i> 배정 초기화
+                                            </button>
                                             <button onClick={() => setIsNavMenuOpen(!isNavMenuOpen)} className={`bg-white border border-slate-200 text-slate-600 hover:text-blue-600 px-3 py-1.5 rounded text-xs font-bold transition shadow-sm ${isNavMenuOpen ? 'bg-blue-50 border-blue-300 text-blue-700' : ''}`}><i className={`fas fa-chevron-${isNavMenuOpen ? 'up' : 'down'}`}></i> 복붙기능</button>
                                         </div>
                                     </div>
