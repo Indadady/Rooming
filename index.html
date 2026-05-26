@@ -256,7 +256,7 @@
         );
 
         const RoomRow = ({ room, actualIdx, globalIdx, updateRoom, updateGuest, changeRoomType, removeRoom, dragRoomStart, dragRoomEnter, dragRoomEnd, dropRoom, fontSize, isInternationalRooming, isSharedMode }) => {
-            const roomNoFontSize = Math.round(fontSize * 3 * 10) / 10;
+            const roomNoFontSize = Math.round(fontSize * 2.1 * 10) / 10; /* 기본 3배 → 30% 축소(2.1배) */
             return (
             <div
                 className="room-row room-grid group relative bg-white w-full h-full border-b-2 border-slate-300 box-border"
