@@ -15,7 +15,7 @@
     
     <!-- 카카오톡 공유 썸네일 및 메타 태그 -->
     <meta property="og:title" content="투어메이커 스마트 명단/루밍 설문 시스템">
-    <meta property="og:description" content="담당자님, 링크를 통해 방배정(루밍리스트) 작성을 부탁드립니다.">
+    <meta property="og:description" content="담당자님, 정해진 객실에 한글 이름만 넣어 제출해 주세요.">
     <meta property="og:image" content="https://blogger.googleusercontent.com/img/a/AVvXsEjQVWjqNlaxb98AP-qG4LHAIN9gK9sn4cGowBArA_-DUz0rxQycXrr3vFhvUqMM9Pa5tP2cDBxqBzW_re-HqzVLVAngEO8FAORbaQ36ANr0BULZ_q2PBFdDbEUJhQqr7LCGGuXO1snQ-bYx5SdFP1GZllmKNTxYv66H8E7zYyvQLsq3jour2LNjQ4PyAbo">
     <meta property="og:type" content="website">
     
@@ -334,9 +334,10 @@
             const urlEventCode = searchParams.get('code') || '';
 
             const [isSharedMode, setIsSharedMode] = useState(isInitialShared);
+            const isUrlShared = isInitialShared;
             const [activeMainTab, setActiveMainTab] = useState(isInitialShared ? 'rooming' : 'traveler');
-            // 기본값을 켜둠으로 변경하여 사용자가 항상 바로 변환기를 볼 수 있도록 유도
-            const [isNavMenuOpen, setIsNavMenuOpen] = useState(true);
+            // 관리자: 복붙 패널 기본 오픈 / 담당자(공유): 단순 입력만
+            const [isNavMenuOpen, setIsNavMenuOpen] = useState(!isInitialShared);
 
             const [docFontSize, setDocFontSize] = useState(10.5); 
             const [commonHeader, setCommonHeader] = useState({ 
@@ -753,16 +754,22 @@
             // [TAB 2] 방 배정 (루밍리스트)
             // ==========================================
             const [isInternationalRooming, setIsInternationalRooming] = useState(true);
-            const createDefaultRooms = () => ([{
-                id: Date.now() + Math.random(),
-                type: 'TWIN',
-                roomNo: '',
-                guests: [
-                    { name: '', engName: '', gender: '남', remark: '' },
-                    { name: '', engName: '', gender: '남', remark: '' }
-                ]
-            }]);
+            const ROOM_CAPACITY = { SINGLE: 1, TWIN: 2, TRIPLE: 3, QUAD: 4 };
+            const ROOM_TYPE_KO = { SINGLE: '1인실', TWIN: '2인실', TRIPLE: '3인실', QUAD: '4인실' };
+            const createEmptyGuest = () => ({ name: '', engName: '', gender: '남', remark: '' });
+            const createRoomByType = (type) => {
+                const safeType = ROOM_CAPACITY[type] ? type : 'TWIN';
+                const capacity = ROOM_CAPACITY[safeType];
+                return {
+                    id: Date.now() + Math.random(),
+                    type: safeType,
+                    roomNo: '',
+                    guests: Array.from({ length: capacity }, () => createEmptyGuest())
+                };
+            };
+            const createDefaultRooms = () => ([createRoomByType('TWIN')]);
             const [rooms, setRooms] = useState(createDefaultRooms);
+            const [roomPreset, setRoomPreset] = useState({ TWIN: 10, TRIPLE: 0, SINGLE: 0, QUAD: 0 });
             const [importTextRooming, setImportTextRooming] = useState("");
 
             const dragRoomItem = useRef();
@@ -786,7 +793,6 @@
             };
             const dragRoomEnd = (e) => { e.target.closest('.room-row')?.classList.remove('dragging'); dragRoomItem.current = null; dragOverRoomItem.current = null;};
 
-            const ROOM_CAPACITY = { SINGLE: 1, TWIN: 2, TRIPLE: 3, QUAD: 4 };
             const safeText = (v) => String(v ?? '').trim();
             const normalizeGuest = (guest = {}) => ({
                 name: safeText(guest.name),
@@ -1244,7 +1250,60 @@
             };
 
             const removeRoom = (globalIdx) => setRooms(prev => prev.filter((_, idx) => idx !== globalIdx));
-            const addRoom = () => setRooms(prev => [...prev, { id: Date.now() + Math.random(), roomNo: '', type: 'TWIN', guests: [{name:"", engName:"", gender:"남", remark:""}, {name:"", engName:"", gender:"남", remark:""}] }]);
+            const addRoom = () => setRooms(prev => [...prev, createRoomByType('TWIN')]);
+
+            const applyRoomPreset = () => {
+                const counts = {
+                    TWIN: Math.max(0, parseInt(roomPreset.TWIN, 10) || 0),
+                    TRIPLE: Math.max(0, parseInt(roomPreset.TRIPLE, 10) || 0),
+                    SINGLE: Math.max(0, parseInt(roomPreset.SINGLE, 10) || 0),
+                    QUAD: Math.max(0, parseInt(roomPreset.QUAD, 10) || 0)
+                };
+                const totalRooms = counts.TWIN + counts.TRIPLE + counts.SINGLE + counts.QUAD;
+                if (totalRooms === 0) {
+                    showAlert('⚠️ 방 개수를 1개 이상 입력해 주세요.');
+                    return;
+                }
+                const hasNamedGuests = rooms.some(r => r.guests.some(g => safeText(g.name)));
+                const buildRooms = () => {
+                    const next = [];
+                    ['TWIN', 'TRIPLE', 'SINGLE', 'QUAD'].forEach((type) => {
+                        for (let i = 0; i < counts[type]; i++) next.push(createRoomByType(type));
+                    });
+                    setRooms(next);
+                    showAlert(`✅ 빈 객실 ${totalRooms}개를 만들었습니다.\n(2인실 ${counts.TWIN} · 3인실 ${counts.TRIPLE} · 1인실 ${counts.SINGLE} · 4인실 ${counts.QUAD})\n\n이제 링크를 복사해 담당자에게 보내세요.`);
+                };
+                if (hasNamedGuests) {
+                    setModal({
+                        isOpen: true,
+                        type: 'confirm',
+                        message: '이미 입력된 이름 배정이 있습니다.\n이 구성으로 빈 방을 다시 만들면 기존 내용이 삭제됩니다. 계속할까요?',
+                        inputValue: '',
+                        onConfirm: () => {
+                            setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null, onChange: null });
+                            buildRooms();
+                        },
+                        onCancel: () => { setModal({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null, onChange: null }); }
+                    });
+                    return;
+                }
+                buildRooms();
+            };
+
+            const enterSharedPreview = () => {
+                if (!rooms.length) {
+                    showAlert('⚠️ 먼저 방 구성을 만들어 주세요.');
+                    return;
+                }
+                setActiveMainTab('rooming');
+                setIsSharedMode(true);
+            };
+
+            const exitSharedPreview = () => {
+                if (isUrlShared) return;
+                setIsSharedMode(false);
+                setActiveMainTab('rooming');
+            };
 
             const handleResetRooming = () => {
                 setModal({
@@ -1308,12 +1367,26 @@
             };
 
             const handleSubmitRooming = () => {
-                const check = validateRoomingData(rooms);
+                // 담당자는 한글 이름만 입력 → 제출 시 영문명 자동 보완(해외 인쇄/호텔용)
+                const roomsReady = sanitizeRooms(rooms).map(room => ({
+                    ...room,
+                    guests: room.guests.map(guest => ({
+                        ...guest,
+                        engName: guest.engName || (guest.name ? koreanToEnglish(guest.name) : '')
+                    }))
+                }));
+                setRooms(roomsReady);
+
+                const check = validateRoomingData(roomsReady);
                 if (check.errors.length > 0) {
                     showAlert(`⚠️ 제출 전 확인이 필요합니다.\n\n${check.errors.join('\n')}`);
                     return;
                 }
                 if (!db || !user) {
+                    if (!isUrlShared) {
+                        showAlert('✅ 미리보기에서는 제출 서버 연결 없이 작성 UX만 확인합니다.\n실제 담당자 링크에서는 여기서 제출됩니다.');
+                        return;
+                    }
                     showAlert("⚠️ 서버 연결이 아직 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.");
                     return;
                 }
@@ -1330,7 +1403,7 @@
                         const { collection, addDoc } = window.FirebaseModules;
                         const currentCode = getStableEventCode();
                         const subRef = collection(db, 'artifacts', appId, 'public', 'data', 'rooming_submissions');
-                        const normalizedRooms = sanitizeRooms(rooms);
+                        const normalizedRooms = roomsReady;
                         const normalizedStats = computeRoomStats(normalizedRooms);
                         await addDoc(subRef, {
                             eventCode: currentCode,
@@ -1341,7 +1414,7 @@
                             isInternationalRooming,
                             rooms: normalizedRooms,
                             stats: normalizedStats,
-                            schemaVersion: 'tourmaker-rooming-v2.2'
+                            schemaVersion: 'tourmaker-rooming-v2.3'
                         });
                         setSubmitSuccess(true);
                     } catch(err) {
@@ -1425,11 +1498,16 @@
                                 <div className="flex items-center gap-2 md:gap-3">
                                     <img src={TM_LOGO} className="h-5 md:h-6 filter brightness-0 invert" alt="Tourmaker Logo" />
                                     <div className="h-3 md:h-4 w-[1px] bg-slate-500"></div>
-                                    <h1 className="font-bold text-white tracking-wide text-xs md:text-sm">통합 관리 센터</h1>
+                                    <h1 className="font-bold text-white tracking-wide text-xs md:text-sm">{isSharedMode ? '객실 배정 요청' : '통합 관리 센터'}</h1>
                                 </div>
                             </div>
                             
-                            <div className="flex w-full md:w-auto justify-center overflow-x-auto hide-scrollbar">
+                            <div className="flex w-full md:w-auto justify-center overflow-x-auto hide-scrollbar items-center gap-2">
+                                {isSharedMode && !isUrlShared && (
+                                    <button onClick={exitSharedPreview} className="whitespace-nowrap px-3 py-2 text-[12px] md:text-sm font-bold text-amber-300 border border-amber-400/40 rounded-lg hover:bg-slate-800">
+                                        <i className="fas fa-arrow-left mr-1"></i> 관리자로 돌아가기
+                                    </button>
+                                )}
                                 {!isSharedMode && (
                                     <button onClick={() => setActiveMainTab('traveler')} className={`whitespace-nowrap px-3 md:px-5 py-2 md:py-4 h-full flex items-center font-bold text-[13px] md:text-sm border-b-[3px] transition-all md:rounded-t-md ${activeMainTab === 'traveler' ? 'border-blue-400 text-white bg-slate-800' : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
                                         <i className="fas fa-passport mr-2"></i> 1. 여행자 명단
@@ -1619,24 +1697,128 @@
                         {/* TAB 2: 방 배정 (루밍리스트) / 고객 작성 화면 */}
                         {/* ========================================================================= */}
                         <div className={activeMainTab === 'rooming' ? 'block' : 'hidden'}>
-                            <div className={`w-full max-w-full xl:max-w-[1400px] mx-auto p-0 sm:p-4 md:p-6 print-rooming-list ${isLargeRoomingGroup || totalRoomPages >= 4 ? 'rooming-print-compact' : ''}`}>
-                                <div className="no-print mb-4 md:mb-6">
-                                    
-                                    {/* 공유 모드일 때만 보이는 상단 알림 및 제출 영역 */}
-                                    {isSharedMode && (
-                                        <div className="mb-4 bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-lg shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                                            <div className="flex items-start gap-3">
-                                                <i className="fas fa-bullhorn text-2xl text-indigo-500 mt-1"></i>
-                                                <div className="flex-1 leading-relaxed">
-                                                    <p className="text-base text-indigo-900 font-bold mb-1">담당자님, 아래 객실 배정을 완료해 주세요.</p>
-                                                    <p className="text-sm text-indigo-800 opacity-90">인원과 성별을 알맞게 배치하신 후 우측의 <strong className="text-indigo-600">객실 배정 제출</strong> 버튼을 눌러주세요.</p>
+                            {isSharedMode ? (
+                                <div className="max-w-2xl mx-auto px-4 py-5 md:py-8">
+                                    <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 md:p-5 mb-5">
+                                        <p className="text-indigo-950 font-black text-base md:text-lg mb-1">한글 이름·성별만 넣어 주세요</p>
+                                        <p className="text-indigo-800 text-sm font-bold leading-relaxed">
+                                            객실 수·타입은 이미 정해져 있습니다. 각 방에 이름과 성별만 입력한 뒤 아래 <span className="text-emerald-700">제출</span>을 눌러 주세요.
+                                        </p>
+                                        <div className="mt-4 bg-white rounded-xl border border-indigo-100 p-3 md:p-4">
+                                            <p className="text-[11px] font-black text-slate-400 tracking-wide mb-2">단체 정보</p>
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-slate-400 mb-0.5">단체명</p>
+                                                    <p className="font-black text-slate-800">{commonHeader.groupName || '미입력'}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-slate-400 mb-0.5">일정</p>
+                                                    <p className="font-black text-slate-800">{commonHeader.date || '미입력'}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-slate-400 mb-0.5">지역</p>
+                                                    <p className="font-black text-slate-800">{commonHeader.location || '미입력'}</p>
                                                 </div>
                                             </div>
-                                            <button onClick={handleSubmitRooming} className="w-full md:w-auto bg-emerald-600 text-white px-6 py-3 rounded-xl font-black text-sm md:text-base hover:bg-emerald-500 transition-all shadow-md flex items-center justify-center gap-2 transform hover:-translate-y-0.5 whitespace-nowrap">
-                                                <i className="fas fa-paper-plane"></i> 객실 배정 제출
-                                            </button>
                                         </div>
-                                    )}
+                                        <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold">
+                                            <span className="bg-white text-blue-700 px-2 py-1 rounded border border-blue-100">총 객실 {rooms.length}개</span>
+                                            <span className="bg-white text-slate-600 px-2 py-1 rounded border border-slate-200">입력 {roomStats.total}명</span>
+                                            {rooms.filter(r => r.type === 'TWIN').length > 0 && <span className="bg-white text-blue-600 px-2 py-1 rounded border border-blue-100">2인실 {rooms.filter(r => r.type === 'TWIN').length}</span>}
+                                            {rooms.filter(r => r.type === 'TRIPLE').length > 0 && <span className="bg-white text-amber-700 px-2 py-1 rounded border border-amber-100">3인실 {rooms.filter(r => r.type === 'TRIPLE').length}</span>}
+                                            {rooms.filter(r => r.type === 'SINGLE').length > 0 && <span className="bg-white text-emerald-700 px-2 py-1 rounded border border-emerald-100">1인실 {rooms.filter(r => r.type === 'SINGLE').length}</span>}
+                                            {rooms.filter(r => r.type === 'QUAD').length > 0 && <span className="bg-white text-violet-700 px-2 py-1 rounded border border-violet-100">4인실 {rooms.filter(r => r.type === 'QUAD').length}</span>}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3 mb-6">
+                                        {rooms.length === 0 ? (
+                                            <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-8 text-center">
+                                                <p className="font-black text-slate-600 mb-1">아직 객실 칸이 없습니다</p>
+                                                <p className="text-sm text-slate-400 font-bold">투어메이커에서 방 구성을 만든 뒤 링크를 다시 받아 주세요.</p>
+                                            </div>
+                                        ) : rooms.map((room, rIdx) => (
+                                            <div key={room.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                                <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-100">
+                                                    <div className="font-black text-slate-800 text-sm md:text-base">
+                                                        {rIdx + 1}번 객실
+                                                        <span className="ml-2 text-blue-600">{ROOM_TYPE_KO[room.type] || room.type}</span>
+                                                    </div>
+                                                    <span className="text-[11px] font-bold text-slate-400">{ROOM_CAPACITY[room.type] || room.guests.length}명 정원</span>
+                                                </div>
+                                                <div className="p-3 md:p-4 space-y-2">
+                                                    {room.guests.map((g, gIdx) => (
+                                                        <div key={gIdx} className="flex items-center gap-2">
+                                                            <span className="w-6 text-center text-xs font-bold text-slate-400">{gIdx + 1}</span>
+                                                            <input
+                                                                className="flex-1 min-w-0 rounded-xl border border-slate-200 px-3 py-3 text-base font-bold text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                                                placeholder="이름"
+                                                                value={g.name}
+                                                                onChange={(e) => updateGuest(rIdx, gIdx, 'name', e.target.value)}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => updateGuest(rIdx, gIdx, 'gender', g.gender === '남' ? '여' : '남')}
+                                                                className={`flex-shrink-0 min-w-[3.25rem] px-2 py-3 rounded-xl font-black text-sm ${g.gender === '여' ? 'bg-pink-50 text-pink-600 border border-pink-200' : 'bg-blue-50 text-blue-600 border border-blue-200'}`}
+                                                                title="탭하여 성별 변경"
+                                                            >
+                                                                {g.gender}
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="sticky bottom-3 z-20">
+                                        <button onClick={handleSubmitRooming} className="w-full bg-emerald-600 text-white px-6 py-4 rounded-2xl font-black text-base hover:bg-emerald-500 transition shadow-lg flex items-center justify-center gap-2">
+                                            <i className="fas fa-paper-plane"></i> 객실 배정 제출
+                                        </button>
+                                        <p className="text-center text-[11px] text-slate-400 font-bold mt-2">제출 후 투어메이커가 인쇄용 루밍으로 정리해 컨펌 드립니다.</p>
+                                    </div>
+                                </div>
+                            ) : (
+                            <div className={`w-full max-w-full xl:max-w-[1400px] mx-auto p-0 sm:p-4 md:p-6 print-rooming-list ${isLargeRoomingGroup || totalRoomPages >= 4 ? 'rooming-print-compact' : ''}`}>
+                                <div className="no-print mb-4 md:mb-6">
+                                    {/* 관리자: 방 구성 → 링크 공유 */}
+                                    <div className="mb-4 bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+                                        <div className="flex flex-col lg:flex-row lg:items-end gap-4 justify-between">
+                                            <div className="flex-1">
+                                                <p className="font-black text-emerald-900 text-sm md:text-base mb-1"><i className="fas fa-bed mr-2"></i>1) 방 구성 만들기 (담당자는 이름·성별만 입력)</p>
+                                                <p className="text-[11px] md:text-xs text-emerald-800 font-bold mb-3">링크 전에 아래 루밍 헤더의 단체명·일정·지역을 먼저 적어 두세요. 담당자 화면에 그대로 보입니다.</p>
+                                                <div className="flex flex-wrap gap-2 items-end">
+                                                    {[
+                                                        { key: 'TWIN', label: '2인실' },
+                                                        { key: 'TRIPLE', label: '3인실' },
+                                                        { key: 'SINGLE', label: '1인실' },
+                                                        { key: 'QUAD', label: '4인실' }
+                                                    ].map(({ key, label }) => (
+                                                        <label key={key} className="bg-white border border-emerald-200 rounded-lg px-2 py-1.5 flex flex-col gap-0.5">
+                                                            <span className="text-[10px] font-bold text-slate-500">{label}</span>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                className="w-16 text-center font-black text-slate-800 outline-none"
+                                                                value={roomPreset[key]}
+                                                                onChange={(e) => setRoomPreset(prev => ({ ...prev, [key]: e.target.value }))}
+                                                            />
+                                                        </label>
+                                                    ))}
+                                                    <button onClick={applyRoomPreset} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-lg text-xs md:text-sm font-black shadow-sm">
+                                                        빈 방 생성
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col sm:flex-row gap-2">
+                                                <button onClick={enterSharedPreview} className="bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-50 px-4 py-2.5 rounded-lg text-xs md:text-sm font-black whitespace-nowrap">
+                                                    <i className="fas fa-eye mr-1"></i> 담당자 화면 미리보기
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* 기존 공유 배너는 관리자 화면에서 제거됨 */}
 
                                     {/* 툴바 영역 (관리자, 고객 공통) */}
                                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4 bg-blue-50 py-3 px-3 md:px-4 rounded border border-blue-100">
@@ -1832,6 +2014,7 @@
                                     <button onClick={addRoom} className="bg-white border-2 border-dashed border-blue-300 text-blue-600 px-6 md:px-10 py-3 md:py-4 rounded-xl font-bold text-xs md:text-sm hover:bg-blue-50 hover:border-blue-500 transition-all shadow-sm"><i className="fas fa-bed text-lg mr-2"></i> 빈 객실 추가하기</button>
                                 </div>
                             </div>
+                            )}
                         </div>
 
                         {/* ========================================================================= */}
