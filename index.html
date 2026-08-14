@@ -148,6 +148,17 @@
         const TM_FOOTER_LOGO = "https://blogger.googleusercontent.com/img/a/AVvXsEitI-Z-hD82keOJ1AqHw-VTZjpw2U-O5UjtV9h3zblyG0wjsVfBWe9X9o0Q_Spctrt7krkd9qXO0xKTmGJLw4gyMZrRqpshKMFttnyx6OcC8-IGz3XLUZpGQOnRqVdol8jz5HuoDLqsEifnVRhcjUJHm13Sz8JrX9aPswMNUwZPvGtJEnQjhc2PiXlo-B8";
 
         const generateEventCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+        const EVENT_CODE_STORAGE_KEY = 'tm_rooming_eventCode';
+        const readStoredEventCode = () => {
+            try { return String(localStorage.getItem(EVENT_CODE_STORAGE_KEY) || '').trim().toUpperCase(); }
+            catch (e) { return ''; }
+        };
+        const writeStoredEventCode = (code) => {
+            try {
+                const v = String(code || '').trim().toUpperCase();
+                if (v) localStorage.setItem(EVENT_CODE_STORAGE_KEY, v);
+            } catch (e) {}
+        };
 
         // 루밍 인쇄·페이지 분할 (최대 200명 / 대규모 단체 A4 안전 출력)
         const ROOMING_MAX_PAX = 200;
@@ -346,7 +357,7 @@
                 date: "", 
                 location: "", 
                 number: "", 
-                eventCode: urlEventCode || generateEventCode() 
+                eventCode: (urlEventCode || readStoredEventCode() || generateEventCode()).toUpperCase()
             });
 
             const [modal, setModal] = useState({ isOpen: false, type: 'alert', message: '', inputValue: '', onConfirm: null, onCancel: null, onChange: null });
@@ -356,7 +367,8 @@
             // Firebase States
             const [db, setDb] = useState(null);
             const [user, setUser] = useState(null);
-            const [submissions, setSubmissions] = useState([]);
+            const [allSubmissions, setAllSubmissions] = useState([]);
+            const [submissionsError, setSubmissionsError] = useState('');
 
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'tourmaker-rooming-app';
 
@@ -424,20 +436,37 @@
                         const subRef = collection(db, 'artifacts', appId, 'public', 'data', 'rooming_submissions');
                         
                         unsubscribe = onSnapshot(subRef, (snapshot) => {
-                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                            const filtered = data.filter(d => d.eventCode === commonHeader.eventCode)
+                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
                                                  .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
-                            setSubmissions(filtered);
+                            setAllSubmissions(data);
+                            setSubmissionsError('');
                         }, (error) => {
                             console.error("Snapshot error:", error);
+                            setSubmissionsError(error.message || '제출 목록을 불러오지 못했습니다.');
                         });
                     } catch (err) {
                         console.error("Fetch error:", err);
+                        setSubmissionsError(err.message || '제출 목록을 불러오지 못했습니다.');
                     }
                 };
                 fetchSubs();
                 return () => unsubscribe();
-            }, [user, db, isSharedMode, commonHeader.eventCode]);
+            }, [user, db, isSharedMode]);
+
+            useEffect(() => {
+                if (isUrlShared) return;
+                const code = String(commonHeader.eventCode || '').trim().toUpperCase();
+                if (code) writeStoredEventCode(code);
+            }, [commonHeader.eventCode, isUrlShared]);
+
+            const visibleSubmissions = useMemo(() => {
+                const code = String(commonHeader.eventCode || '').trim().toUpperCase();
+                return allSubmissions.filter(d => String(d.eventCode || '').toUpperCase() === code);
+            }, [allSubmissions, commonHeader.eventCode]);
+            const otherSubmissions = useMemo(() => {
+                const code = String(commonHeader.eventCode || '').trim().toUpperCase();
+                return allSubmissions.filter(d => String(d.eventCode || '').toUpperCase() !== code).slice(0, 8);
+            }, [allSubmissions, commonHeader.eventCode]);
 
 
             const showAlert = (message) => {
@@ -935,9 +964,13 @@
             };
             
             const getStableEventCode = () => {
-                const current = safeText(commonHeader.eventCode);
-                if (current) return current;
+                const current = safeText(commonHeader.eventCode).toUpperCase();
+                if (current) {
+                    writeStoredEventCode(current);
+                    return current;
+                }
                 const nextCode = generateEventCode();
+                writeStoredEventCode(nextCode);
                 setCommonHeader(prev => ({ ...prev, eventCode: nextCode }));
                 return nextCode;
             };
@@ -1434,6 +1467,10 @@
             };
 
             const handleSubmitRooming = () => {
+                if (isSharedMode && !isUrlShared) {
+                    showAlert('✅ 미리보기입니다. 이 화면의 제출은 서버에 저장되지 않습니다.\n\n실제 확인은 [링크 복사]로 만든 주소를 새 탭에서 연 뒤 제출해 주세요.\n제출 후 관리자 화면의 「3. 방배정 완료」에서 같은 공유 코드로 확인합니다.');
+                    return;
+                }
                 // 담당자는 한글 이름만 입력 → 제출 시 영문명 자동 보완(해외 인쇄/호텔용)
                 const roomsReady = sanitizeRooms(rooms).map(room => ({
                     ...room,
@@ -1585,7 +1622,7 @@
                                 </button>
                                 {!isSharedMode && (
                                     <button onClick={() => setActiveMainTab('results')} className={`whitespace-nowrap px-3 md:px-5 py-2 md:py-4 h-full flex items-center font-bold text-[13px] md:text-sm border-b-[3px] transition-all md:rounded-t-md ${activeMainTab === 'results' ? 'border-emerald-400 text-emerald-400 bg-slate-800' : 'border-transparent text-slate-400 hover:text-emerald-200 hover:bg-slate-800'}`}>
-                                        <i className="fas fa-inbox mr-2"></i> 3. 방배정 완료 <span className="ml-2 bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{submissions.length}</span>
+                                        <i className="fas fa-inbox mr-2"></i> 3. 방배정 완료 <span className="ml-2 bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{visibleSubmissions.length}</span>
                                     </button>
                                 )}
                             </div>
@@ -1593,9 +1630,9 @@
                             <div className="flex w-full md:w-auto justify-end items-center gap-2 pt-1 md:pt-0 border-t border-slate-700 md:border-none">
                                 {!isSharedMode && (
                                     <React.Fragment>
-                                        <div className="hidden lg:flex items-center gap-2 mr-2 bg-slate-800 px-2 py-1 rounded text-xs">
+                                        <div className="flex items-center gap-2 mr-2 bg-slate-800 px-2 py-1 rounded text-xs">
                                             <span className="text-slate-400 whitespace-nowrap">공유 코드:</span>
-                                            <input type="text" className="bg-transparent text-emerald-400 font-bold w-24 xl:w-40 outline-none text-center transition-all" value={commonHeader.eventCode} onChange={e=>setCommonHeader({...commonHeader, eventCode: e.target.value})} placeholder="코드" />
+                                            <input type="text" className="bg-transparent text-emerald-400 font-bold w-24 xl:w-40 outline-none text-center transition-all uppercase" value={commonHeader.eventCode} onChange={e=>setCommonHeader({...commonHeader, eventCode: e.target.value.toUpperCase()})} placeholder="코드" />
                                         </div>
                                         <button onClick={handleCopyLink} className="text-emerald-300 hover:text-emerald-100 px-2 py-1.5 text-xs font-bold transition flex items-center gap-1 whitespace-nowrap" title="고객 설문 전송용 링크 복사"><i className="fas fa-link"></i> 링크 복사</button>
                                     </React.Fragment>
@@ -2095,17 +2132,38 @@
                                             <i className="fas fa-inbox text-emerald-500"></i> 제출된 객실 배정 목록
                                         </h2>
                                         <p className="text-slate-500 font-bold">고객이 링크를 통해 제출한 데이터가 실시간으로 이곳에 쌓입니다. 현재 공유 코드: <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">{commonHeader.eventCode || '미설정'}</span></p>
+                                        <p className="text-slate-400 text-sm font-bold mt-1">링크 주소의 <span className="font-black text-slate-600">code=</span> 값과 위 코드가 같아야 어제 제출분도 보입니다. (같은 PC·같은 IP여도 무관합니다)</p>
                                     </div>
 
-                                    {submissions.length === 0 ? (
+                                    {submissionsError && (
+                                        <div className="bg-red-50 border border-red-200 text-red-700 font-bold text-sm rounded-xl p-4 mb-4">
+                                            제출 목록을 불러오지 못했습니다: {submissionsError}
+                                        </div>
+                                    )}
+
+                                    {visibleSubmissions.length === 0 ? (
                                         <div className="bg-white p-12 text-center rounded-xl shadow-sm border border-slate-200">
                                             <i className="fas fa-box-open text-5xl text-slate-300 mb-4"></i>
-                                            <h3 className="text-lg font-bold text-slate-600">아직 제출된 데이터가 없습니다.</h3>
-                                            <p className="text-slate-400 text-sm mt-2">고객에게 링크를 공유하고 배정 제출을 요청해 보세요.</p>
+                                            <h3 className="text-lg font-bold text-slate-600">이 공유 코드로는 아직 제출이 없습니다.</h3>
+                                            <p className="text-slate-400 text-sm mt-2">담당자 링크의 코드가 <span className="font-black text-slate-600">{commonHeader.eventCode || '미설정'}</span> 인지 확인해 주세요.</p>
+                                            {otherSubmissions.length > 0 && (
+                                                <div className="mt-6 text-left bg-amber-50 border border-amber-200 rounded-xl p-4">
+                                                    <p className="text-amber-800 font-black text-sm mb-3">다른 코드로 들어온 제출 {otherSubmissions.length}건이 있습니다. 코드를 누르면 해당 건을 봅니다.</p>
+                                                    <div className="grid gap-2">
+                                                        {otherSubmissions.map((sub) => (
+                                                            <button key={sub.id} type="button" onClick={() => setCommonHeader(prev => ({ ...prev, eventCode: String(sub.eventCode || '').toUpperCase() }))} className="w-full text-left bg-white border border-amber-200 rounded-lg px-3 py-2 hover:border-emerald-400 transition">
+                                                                <span className="font-black text-emerald-700 mr-2">{sub.eventCode || '코드없음'}</span>
+                                                                <span className="font-bold text-slate-700">{sub.submitterName || '이름 미입력'}</span>
+                                                                <span className="text-slate-400 text-xs ml-2">{sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : ''}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="grid gap-4">
-                                            {submissions.map((sub, idx) => (
+                                            {visibleSubmissions.map((sub, idx) => (
                                                 <div key={sub.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:shadow-md transition relative group">
                                                     <button onClick={() => handleDeleteSubmission(sub.id)} className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors" title="이 제출본 삭제">
                                                         <i className="fas fa-times text-lg"></i>
