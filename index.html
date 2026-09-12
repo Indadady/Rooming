@@ -101,9 +101,13 @@
         
         .room-print-text { display: none; } /* 화면에서는 숨김 처리 */
 
-        .dragging { opacity: 0.55; background-color: #e0f2fe; }
-        .drag-handle { cursor: grab; }
-        .drag-handle:active { cursor: grabbing; }
+        .dragging-row { opacity: 0.55; background-color: #e0f2fe; }
+        .drag-handle { cursor: grab; touch-action: none; user-select: none; -webkit-user-drag: element; }
+        .drag-handle:active, body.row-dragging .drag-handle { cursor: grabbing; }
+        .traveler-row.drop-before, .room-row.drop-before { box-shadow: inset 0 3px 0 0 #2563eb; }
+        .traveler-row.drop-after, .room-row.drop-after { box-shadow: inset 0 -3px 0 0 #2563eb; }
+        body.row-dragging { cursor: grabbing; user-select: none; }
+        body.row-dragging input, body.row-dragging textarea, body.row-dragging [contenteditable] { caret-color: transparent; }
 
         .editable-cell-input { white-space: normal !important; width: 100% !important; transition: all 0.15s ease; font-family: inherit; }
         .editable-cell-input:hover { background-color: #f1f5f9; cursor: text; border-radius: 4px; overflow: visible; }
@@ -143,6 +147,199 @@
 
     <script type="text/babel" data-presets="react">
         const { useState, useRef, useMemo, useEffect } = React;
+
+        const moveByInsertAt = (list, fromIndex, insertAt) => {
+            if (fromIndex < 0 || fromIndex >= list.length) return list;
+            let to = insertAt;
+            if (fromIndex < to) to--;
+            if (to < 0 || to === fromIndex) return list;
+            const next = list.slice();
+            const [item] = next.splice(fromIndex, 1);
+            next.splice(to, 0, item);
+            return next;
+        };
+
+        /** 그립 전용 드래그 + before/after 삽입선 (가격산출 내역서와 동일 UX) */
+        const useSortableDrag = (kind, enabled, onMove) => {
+            const stateRef = useRef({ active: false, moved: false, fromIndex: -1, insertAt: -1, pointerId: null, startX: 0, startY: 0 });
+            const onMoveRef = useRef(onMove);
+            onMoveRef.current = onMove;
+
+            useEffect(() => {
+                if (!enabled) return undefined;
+
+                const rowSel = kind === 'traveler' ? 'tr.traveler-row' : 'div.room-row';
+                const gripSel = `.js-drag-${kind}`;
+
+                const rowsOf = () =>
+                    Array.from(document.querySelectorAll(`${rowSel}[data-drag-index]`))
+                        .sort((a, b) => Number(a.dataset.dragIndex) - Number(b.dataset.dragIndex));
+
+                const clearMarks = () => {
+                    document.querySelectorAll(`${rowSel}.drop-before, ${rowSel}.drop-after, ${rowSel}.dragging-row`).forEach((el) => {
+                        el.classList.remove('drop-before', 'drop-after', 'dragging-row');
+                    });
+                };
+
+                const applyMarks = (fromIndex, insertAt) => {
+                    clearMarks();
+                    const rows = rowsOf();
+                    const dragging = rows.find((r) => Number(r.dataset.dragIndex) === fromIndex);
+                    if (dragging) dragging.classList.add('dragging-row');
+                    if (!rows.length) return;
+                    if (insertAt >= rows.length) rows[rows.length - 1].classList.add('drop-after');
+                    else {
+                        const target = rows.find((r) => Number(r.dataset.dragIndex) === insertAt);
+                        if (target) target.classList.add('drop-before');
+                    }
+                };
+
+                const dropFromPoint = (x, y) => {
+                    const rows = rowsOf();
+                    if (!rows.length) return 0;
+                    const fromIndex = stateRef.current.fromIndex;
+                    const stack = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [document.elementFromPoint(x, y)];
+                    let hit = null;
+                    for (let i = 0; i < stack.length; i++) {
+                        const el = stack[i];
+                        if (!el || !el.closest) continue;
+                        if (el.closest(gripSel)) continue;
+                        const row = el.closest(rowSel);
+                        if (!row || row.dataset.dragIndex == null) continue;
+                        if (Number(row.dataset.dragIndex) === fromIndex) continue;
+                        hit = row;
+                        break;
+                    }
+                    if (hit) {
+                        const rect = hit.getBoundingClientRect();
+                        const idx = Number(hit.dataset.dragIndex);
+                        return y < rect.top + rect.height / 2 ? idx : idx + 1;
+                    }
+                    const first = rows[0].getBoundingClientRect();
+                    const last = rows[rows.length - 1].getBoundingClientRect();
+                    if (y < first.top) return Number(rows[0].dataset.dragIndex);
+                    if (y > last.bottom) return Number(rows[rows.length - 1].dataset.dragIndex) + 1;
+                    for (let i = 0; i < rows.length; i++) {
+                        const rect = rows[i].getBoundingClientRect();
+                        const idx = Number(rows[i].dataset.dragIndex);
+                        if (y < rect.top + rect.height / 2) return idx;
+                        if (y <= rect.bottom) return idx + 1;
+                    }
+                    return Number(rows[rows.length - 1].dataset.dragIndex) + 1;
+                };
+
+                const endDrag = () => {
+                    const d = stateRef.current;
+                    if (!d.active) return;
+                    const { fromIndex, insertAt, moved } = d;
+                    d.active = false;
+                    d.moved = false;
+                    d.pointerId = null;
+                    document.body.classList.remove('row-dragging');
+                    clearMarks();
+                    if (!moved) return;
+                    onMoveRef.current(fromIndex, insertAt);
+                };
+
+                const endPointerDrag = (e) => {
+                    if (stateRef.current.pointerId == null) return;
+                    if (e && e.pointerId != null && e.pointerId !== stateRef.current.pointerId) return;
+                    endDrag();
+                };
+
+                const onDragStart = (e) => {
+                    const grip = e.target.closest && e.target.closest(gripSel);
+                    if (!grip) return;
+                    const row = grip.closest(rowSel);
+                    if (!row) { e.preventDefault(); return; }
+                    const fromIndex = Number(row.dataset.dragIndex);
+                    stateRef.current.active = true;
+                    stateRef.current.moved = true;
+                    stateRef.current.fromIndex = fromIndex;
+                    stateRef.current.insertAt = fromIndex;
+                    stateRef.current.pointerId = null;
+                    if (e.dataTransfer) {
+                        e.dataTransfer.effectAllowed = 'move';
+                        try { e.dataTransfer.setData('text/plain', `${kind}:${fromIndex}`); } catch (err) {}
+                    }
+                    document.body.classList.add('row-dragging');
+                    applyMarks(fromIndex, fromIndex);
+                };
+
+                const onDragOver = (e) => {
+                    if (!stateRef.current.active || stateRef.current.pointerId != null) return;
+                    e.preventDefault();
+                    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+                    const insertAt = dropFromPoint(e.clientX, e.clientY);
+                    stateRef.current.insertAt = insertAt;
+                    applyMarks(stateRef.current.fromIndex, insertAt);
+                };
+
+                const onDrop = (e) => {
+                    if (!stateRef.current.active || stateRef.current.pointerId != null) return;
+                    e.preventDefault();
+                    stateRef.current.insertAt = dropFromPoint(e.clientX, e.clientY);
+                    stateRef.current.moved = true;
+                    endDrag();
+                };
+
+                const onDragEnd = () => {
+                    if (stateRef.current.active && stateRef.current.pointerId == null) endDrag();
+                };
+
+                const onPointerDown = (e) => {
+                    const grip = e.target.closest && e.target.closest(gripSel);
+                    if (!grip) return;
+                    if (e.pointerType === 'mouse') return;
+                    const row = grip.closest(rowSel);
+                    if (!row) return;
+                    const fromIndex = Number(row.dataset.dragIndex);
+                    stateRef.current.active = true;
+                    stateRef.current.moved = false;
+                    stateRef.current.fromIndex = fromIndex;
+                    stateRef.current.insertAt = fromIndex;
+                    stateRef.current.pointerId = e.pointerId;
+                    stateRef.current.startX = e.clientX;
+                    stateRef.current.startY = e.clientY;
+                    e.preventDefault();
+                    try { grip.setPointerCapture(e.pointerId); } catch (err) {}
+                };
+
+                const onPointerMove = (e) => {
+                    if (!stateRef.current.active || stateRef.current.pointerId == null) return;
+                    if (e.pointerId !== stateRef.current.pointerId) return;
+                    const dist = Math.abs(e.clientX - stateRef.current.startX) + Math.abs(e.clientY - stateRef.current.startY);
+                    if (!stateRef.current.moved && dist < 5) return;
+                    stateRef.current.moved = true;
+                    document.body.classList.add('row-dragging');
+                    const insertAt = dropFromPoint(e.clientX, e.clientY);
+                    stateRef.current.insertAt = insertAt;
+                    applyMarks(stateRef.current.fromIndex, insertAt);
+                };
+
+                document.addEventListener('dragstart', onDragStart);
+                document.addEventListener('dragover', onDragOver);
+                document.addEventListener('drop', onDrop);
+                document.addEventListener('dragend', onDragEnd);
+                document.addEventListener('pointerdown', onPointerDown);
+                document.addEventListener('pointermove', onPointerMove);
+                document.addEventListener('pointerup', endPointerDrag);
+                document.addEventListener('pointercancel', endPointerDrag);
+
+                return () => {
+                    document.removeEventListener('dragstart', onDragStart);
+                    document.removeEventListener('dragover', onDragOver);
+                    document.removeEventListener('drop', onDrop);
+                    document.removeEventListener('dragend', onDragEnd);
+                    document.removeEventListener('pointerdown', onPointerDown);
+                    document.removeEventListener('pointermove', onPointerMove);
+                    document.removeEventListener('pointerup', endPointerDrag);
+                    document.removeEventListener('pointercancel', endPointerDrag);
+                    clearMarks();
+                    document.body.classList.remove('row-dragging');
+                };
+            }, [kind, enabled]);
+        };
 
         const TM_LOGO = "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgHfgIX70O5k6Anuo0UgALIdaG9jSga9auHu3uyz0uEirylGPAJnjN_qQbvEGMUvPqUQf_g9FMNUHRxlDcUBf4vZ3Mpy4TnA9WxbmzWYK11gt2zuy_Irl4wctNFjcjLyPo0GPXV792o_J7L9guRMuDfeC1gy7USwywjYbECZgzcsHybuGRRAXAnO1eNmP8/s320/logo.png";
         const TM_FOOTER_LOGO = "https://blogger.googleusercontent.com/img/a/AVvXsEitI-Z-hD82keOJ1AqHw-VTZjpw2U-O5UjtV9h3zblyG0wjsVfBWe9X9o0Q_Spctrt7krkd9qXO0xKTmGJLw4gyMZrRqpshKMFttnyx6OcC8-IGz3XLUZpGQOnRqVdol8jz5HuoDLqsEifnVRhcjUJHm13Sz8JrX9aPswMNUwZPvGtJEnQjhc2PiXlo-B8";
@@ -276,21 +473,20 @@
             />
         );
 
-        const RoomRow = ({ room, actualIdx, globalIdx, updateRoom, updateGuest, changeRoomType, removeRoom, dragRoomStart, dragRoomEnter, dragRoomEnd, dropRoom, fontSize, isInternationalRooming, isSharedMode }) => {
+        const RoomRow = ({ room, actualIdx, globalIdx, updateRoom, updateGuest, changeRoomType, removeRoom, fontSize, isInternationalRooming, isSharedMode }) => {
             const roomNoFontSize = Math.round(fontSize * 2.1 * 10) / 10; /* 기본 3배 → 30% 축소(2.1배) */
             return (
             <div
                 className="room-row room-grid group relative bg-white w-full h-full border-b-2 border-slate-300 box-border"
                 style={{ breakInside: 'avoid' }}
-                draggable={!isSharedMode}
-                onDragStart={!isSharedMode ? (e) => dragRoomStart(e, globalIdx) : undefined}
-                onDragEnter={!isSharedMode ? (e) => dragRoomEnter(e, globalIdx) : undefined}
-                onDragEnd={!isSharedMode ? dragRoomEnd : undefined}
-                onDrop={!isSharedMode ? dropRoom : undefined}
-                onDragOver={!isSharedMode ? (e) => e.preventDefault() : undefined}
+                data-drag-index={globalIdx}
             >
-                <div className={`no-print flex items-center justify-center border-r border-slate-200 text-slate-300 ${!isSharedMode ? 'hover:text-blue-500 drag-handle' : ''}`} title={!isSharedMode ? "드래그하여 방 순서 변경" : ""}>
-                    <i className="fas fa-bars"></i>
+                <div className="no-print flex items-center justify-center border-r border-slate-200 text-slate-300">
+                    {!isSharedMode ? (
+                        <button type="button" className="drag-handle js-drag-room hover:text-blue-500 p-1" draggable="true" title="드래그하여 방 순서 변경" aria-label="방 순서 변경">
+                            <i className="fas fa-bars"></i>
+                        </button>
+                    ) : null}
                 </div>
 
                 <div className="flex items-center justify-center border-r border-slate-200 py-1 bg-slate-50">
@@ -508,26 +704,9 @@
                 { id: 1, nameKor: "", nameEng: "", birth: "", gender: "M", passportNo: "", expiry: "", nation: "KOR", remark: "" }
             ]);
 
-            const dragItem = useRef();
-            const dragOverItem = useRef();
-
-            const dragStart = (e, position) => { dragItem.current = position; e.target.closest('tr')?.classList.add('dragging'); };
-            const dragEnter = (e, position) => { dragOverItem.current = position; };
-            const drop = (e) => {
-                const tr = e.target.closest('tr');
-                if (tr) tr.classList.remove('dragging');
-                if (dragItem.current === undefined || dragItem.current === null || dragOverItem.current === undefined || dragOverItem.current === null) return;
-                setTravelers(prev => {
-                    const copyListItems = [...prev];
-                    const dragItemContent = copyListItems[dragItem.current];
-                    if (!dragItemContent) return prev;
-                    copyListItems.splice(dragItem.current, 1);
-                    copyListItems.splice(dragOverItem.current, 0, dragItemContent);
-                    return copyListItems;
-                });
-                dragItem.current = null; dragOverItem.current = null;
-            };
-            const dragEnd = (e) => { e.target.closest('tr')?.classList.remove('dragging'); dragItem.current = null; dragOverItem.current = null; };
+            useSortableDrag('traveler', true, (fromIndex, insertAt) => {
+                setTravelers(prev => moveByInsertAt(prev, fromIndex, insertAt));
+            });
 
             const getExpiryStatus = (dateStr) => {
                 if (!dateStr) return { color: "text-slate-400", warning: false };
@@ -868,26 +1047,9 @@
             const [roomPreset, setRoomPreset] = useState({ TWIN: 10, TRIPLE: 0, SINGLE: 0, QUAD: 0 });
             const [importTextRooming, setImportTextRooming] = useState("");
 
-            const dragRoomItem = useRef();
-            const dragOverRoomItem = useRef();
-
-            const dragRoomStart = (e, position) => { dragRoomItem.current = position; e.target.closest('.room-row')?.classList.add('dragging'); };
-            const dragRoomEnter = (e, position) => { dragOverRoomItem.current = position; };
-            const dropRoom = (e) => {
-                const tr = e.target.closest('.room-row');
-                if (tr) tr.classList.remove('dragging');
-                if (dragRoomItem.current === undefined || dragRoomItem.current === null || dragOverRoomItem.current === undefined || dragOverRoomItem.current === null) return;
-                setRooms(prev => {
-                    const copyRooms = [...prev];
-                    const dragContent = copyRooms[dragRoomItem.current];
-                    if (!dragContent) return prev;
-                    copyRooms.splice(dragRoomItem.current, 1);
-                    copyRooms.splice(dragOverRoomItem.current, 0, dragContent);
-                    return copyRooms;
-                });
-                dragRoomItem.current = null; dragOverRoomItem.current = null;
-            };
-            const dragRoomEnd = (e) => { e.target.closest('.room-row')?.classList.remove('dragging'); dragRoomItem.current = null; dragOverRoomItem.current = null;};
+            useSortableDrag('room', !isSharedMode, (fromIndex, insertAt) => {
+                setRooms(prev => moveByInsertAt(prev, fromIndex, insertAt));
+            });
 
             const safeText = (v) => String(v ?? '').trim();
             const normalizeGuest = (guest = {}) => ({
@@ -1747,8 +1909,12 @@
                                                             const status = getExpiryStatus(t.expiry);
                                                             const globalIdx = t.globalIdx; 
                                                             return (
-                                                                <tr key={t.id} className="border-b border-slate-200 hover:bg-slate-50 transition group bg-white fixed-row-height" draggable onDragStart={(e) => dragStart(e, globalIdx)} onDragEnter={(e) => dragEnter(e, globalIdx)} onDragEnd={dragEnd} onDrop={drop} onDragOver={(e) => e.preventDefault()}>
-                                                                    <td className="no-print text-center text-slate-300 hover:text-blue-500 drag-handle"><i className="fas fa-bars"></i></td>
+                                                                <tr key={t.id} className="traveler-row border-b border-slate-200 hover:bg-slate-50 transition group bg-white fixed-row-height" data-drag-index={globalIdx}>
+                                                                    <td className="no-print text-center text-slate-300">
+                                                                        <button type="button" className="drag-handle js-drag-traveler hover:text-blue-500 p-1" draggable="true" title="드래그하여 순서 변경" aria-label="순서 변경">
+                                                                            <i className="fas fa-bars"></i>
+                                                                        </button>
+                                                                    </td>
                                                                     <td className="text-center text-slate-500 font-bold">{actualIdx}</td>
                                                                     <td className="border-r border-slate-200 text-center"><EditableCell val={t.nameKor} onChange={(v) => updateField(t.id, 'nameKor', v)} bold center fontSize={docFontSize} /></td>
                                                                     <td className="border-r border-slate-200 pl-2"><EditableCell val={t.nameEng} onChange={(v) => updateField(t.id, 'nameEng', v.toUpperCase())} uppercase fontSize={docFontSize} /></td>
@@ -2077,11 +2243,11 @@
                                                                     return (
                                                                         <div key={i} className="flex flex-col md:flex-row print:flex-row w-full items-stretch bg-white box-border">
                                                                             <div className="w-full md:w-1/2 print:w-1/2 md:border-r-[2px] print:border-r-[2px] border-slate-800 flex box-border">
-                                                                                <RoomRow room={leftData.room} actualIdx={leftData.actualIdx} globalIdx={leftData.globalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} isSharedMode={isSharedMode} />
+                                                                                <RoomRow room={leftData.room} actualIdx={leftData.actualIdx} globalIdx={leftData.globalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} isSharedMode={isSharedMode} />
                                                                             </div>
                                                                             <div className="w-full md:w-1/2 print:w-1/2 flex border-b md:border-b-0 print:border-b-0 border-slate-300 box-border">
                                                                                 {rightData ? (
-                                                                                    <RoomRow room={rightData.room} actualIdx={rightData.actualIdx} globalIdx={rightData.globalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} dragRoomStart={dragRoomStart} dragRoomEnter={dragRoomEnter} dragRoomEnd={dragRoomEnd} dropRoom={dropRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} isSharedMode={isSharedMode}/>
+                                                                                    <RoomRow room={rightData.room} actualIdx={rightData.actualIdx} globalIdx={rightData.globalIdx} updateRoom={updateRoom} updateGuest={updateGuest} changeRoomType={changeRoomType} removeRoom={removeRoom} fontSize={docFontSize} isInternationalRooming={isInternationalRooming} isSharedMode={isSharedMode}/>
                                                                                 ) : (
                                                                                     <div className="w-full h-full bg-white border-b-2 border-slate-300 box-border"></div>
                                                                                 )}
