@@ -384,6 +384,55 @@
             } catch (e) {}
         };
 
+        const UNDATED_MONTH = 'undated';
+        const seoulYearMonth = (date = new Date()) => {
+            const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit' }).formatToParts(date);
+            const year = parts.find((part) => part.type === 'year')?.value || '';
+            const month = parts.find((part) => part.type === 'month')?.value || '';
+            return year && month ? `${year}-${month}` : '';
+        };
+        const monthKeyFromIso = (iso) => {
+            if (!iso) return '';
+            const date = new Date(iso);
+            if (Number.isNaN(date.getTime())) return '';
+            return seoulYearMonth(date);
+        };
+        const toMonthKey = (year, month) => {
+            const y = Number(year);
+            const m = Number(month);
+            if (!y || m < 1 || m > 12) return '';
+            return `${y}-${String(m).padStart(2, '0')}`;
+        };
+        const departureMonthKeyFromText = (raw, fallbackIso) => {
+            const text = normalizeIdentityPart(raw);
+            if (!text) return monthKeyFromIso(fallbackIso) || UNDATED_MONTH;
+            let match = text.match(/(20\d{2})\s*[.\-\/년]\s*(\d{1,2})/);
+            if (match) return toMonthKey(match[1], match[2]) || UNDATED_MONTH;
+            match = text.match(/\b(20\d{2})(\d{2})(\d{2})\b/);
+            if (match) return toMonthKey(match[1], match[2]) || UNDATED_MONTH;
+            match = text.match(/(?:^|[^\d])(\d{2})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
+            if (match) {
+                const yy = Number(match[1]);
+                const year = yy >= 70 ? 1900 + yy : 2000 + yy;
+                return toMonthKey(year, match[2]) || UNDATED_MONTH;
+            }
+            match = text.match(/(\d{1,2})\s*월/) || text.match(/(?:^|\s)(\d{1,2})[.\-\/]\d{1,2}(?:\s|$|~|-)/);
+            if (match) {
+                const year = (monthKeyFromIso(fallbackIso) || seoulYearMonth()).slice(0, 4);
+                return toMonthKey(year, match[1]) || UNDATED_MONTH;
+            }
+            return UNDATED_MONTH;
+        };
+        const submissionDepartureMonth = (sub) => departureMonthKeyFromText(
+            sub?.departDate || sub?.commonHeader?.date || '',
+            sub?.submittedAt
+        );
+        const submissionMonthLabel = (key) => {
+            if (key === UNDATED_MONTH) return '일정 미입력';
+            const [year, month] = String(key).split('-');
+            return `${year}년 ${Number(month)}월`;
+        };
+
         // 루밍 인쇄·페이지 분할 (최대 200명 / 대규모 단체 A4 안전 출력)
         const ROOMING_MAX_PAX = 200;
         const ROOMING_BASE_FONT = 10.5;
@@ -592,6 +641,7 @@
             const [user, setUser] = useState(null);
             const [allSubmissions, setAllSubmissions] = useState([]);
             const [submissionQuery, setSubmissionQuery] = useState('');
+            const [selectedSubmissionMonth, setSelectedSubmissionMonth] = useState('');
             const [submissionsError, setSubmissionsError] = useState('');
 
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'tourmaker-rooming-app';
@@ -692,18 +742,57 @@
                     date: normalizeIdentityPart(sub.departDate || sub.commonHeader?.date || '') || '일정 없음'
                 };
             };
-            const filteredSubmissions = useMemo(() => {
-                const q = normalizeIdentityPart(submissionQuery).toLowerCase();
-                if (!q) return allSubmissions;
-                return allSubmissions.filter((sub) => {
-                    const label = submissionLabel(sub);
-                    return `${label.group} ${label.submitter} ${label.date}`.toLowerCase().includes(q);
+            const submissionMonths = useMemo(() => {
+                const counts = new Map();
+                allSubmissions.forEach((sub) => {
+                    const key = submissionDepartureMonth(sub);
+                    counts.set(key, (counts.get(key) || 0) + 1);
                 });
-            }, [allSubmissions, submissionQuery]);
+                return [...counts.entries()]
+                    .map(([key, count]) => ({ key, count, label: submissionMonthLabel(key) }))
+                    .sort((a, b) => {
+                        if (a.key === UNDATED_MONTH) return 1;
+                        if (b.key === UNDATED_MONTH) return -1;
+                        return b.key.localeCompare(a.key);
+                    });
+            }, [allSubmissions]);
+            const activeMonthKey = useMemo(() => {
+                if (!submissionMonths.length) return '';
+                if (selectedSubmissionMonth && submissionMonths.some((month) => month.key === selectedSubmissionMonth)) return selectedSubmissionMonth;
+                const now = seoulYearMonth();
+                if (submissionMonths.some((month) => month.key === now)) return now;
+                const upcoming = submissionMonths
+                    .filter((month) => month.key !== UNDATED_MONTH && month.key >= now)
+                    .sort((a, b) => a.key.localeCompare(b.key))[0];
+                if (upcoming) return upcoming.key;
+                return submissionMonths.find((month) => month.key !== UNDATED_MONTH)?.key || submissionMonths[0].key;
+            }, [submissionMonths, selectedSubmissionMonth]);
+            const matchesSubmissionQuery = (sub, query) => {
+                if (!query) return true;
+                const label = submissionLabel(sub);
+                return `${label.group} ${label.submitter} ${label.date}`.toLowerCase().includes(query);
+            };
+            const monthSubmissions = useMemo(() => {
+                const q = normalizeIdentityPart(submissionQuery).toLowerCase();
+                return allSubmissions.filter((sub) => submissionDepartureMonth(sub) === activeMonthKey && matchesSubmissionQuery(sub, q));
+            }, [allSubmissions, submissionQuery, activeMonthKey]);
+            const otherMonthMatches = useMemo(() => {
+                const q = normalizeIdentityPart(submissionQuery).toLowerCase();
+                if (!q) return [];
+                const counts = new Map();
+                allSubmissions.forEach((sub) => {
+                    const key = submissionDepartureMonth(sub);
+                    if (key === activeMonthKey || !matchesSubmissionQuery(sub, q)) return;
+                    counts.set(key, (counts.get(key) || 0) + 1);
+                });
+                return [...counts.entries()]
+                    .map(([key, count]) => ({ key, count, label: submissionMonthLabel(key) }))
+                    .sort((a, b) => b.key.localeCompare(a.key));
+            }, [allSubmissions, submissionQuery, activeMonthKey]);
             const submissionGroups = useMemo(() => {
                 const groups = [];
                 const index = new Map();
-                filteredSubmissions.forEach((sub) => {
+                monthSubmissions.forEach((sub) => {
                     const code = String(sub.eventCode || '').trim().toUpperCase() || '코드없음';
                     if (!index.has(code)) {
                         const bucket = { code, items: [] };
@@ -713,7 +802,7 @@
                     index.get(code).items.push(sub);
                 });
                 return groups;
-            }, [filteredSubmissions]);
+            }, [monthSubmissions]);
 
 
             const showAlert = (message) => {
@@ -2409,17 +2498,31 @@
                                         <h2 className="text-2xl font-black text-slate-800 mb-2 flex items-center gap-2">
                                             <i className="fas fa-inbox text-emerald-500"></i> 제출된 객실 배정 목록
                                         </h2>
-                                        <p className="text-slate-500 font-bold">어느 PC에서 열어도 제출 전체가 보입니다. 위쪽 링크 코드는 고객 링크를 만들 때만 쓰이고, 이 목록을 거르지 않습니다.</p>
-                                        <p className="text-slate-400 text-sm font-bold mt-1">같은 코드로 들어온 자료는 코드별로 모여 있고, 단체명이 다르면 각각 따로 표시됩니다. 찾으실 때는 단체명을 입력하세요.</p>
+                                        <p className="text-slate-500 font-bold">어느 PC에서 열어도 같은 목록이 보입니다. 출발일이 있는 달만 나누어, 그 달의 제출만 한 화면에 보여 줍니다.</p>
+                                        <p className="text-slate-400 text-sm font-bold mt-1">같은 코드의 자료는 코드 아래에 모이고, 단체명이 다르면 각각 따로 표시됩니다.</p>
+                                        {submissionMonths.length > 0 && (
+                                            <div className="flex gap-2 overflow-x-auto hide-scrollbar mt-4 pb-1">
+                                                {submissionMonths.map((month) => (
+                                                    <button
+                                                        key={month.key}
+                                                        type="button"
+                                                        onClick={() => setSelectedSubmissionMonth(month.key)}
+                                                        className={`whitespace-nowrap px-3 py-2 rounded-full text-xs font-black border transition ${activeMonthKey === month.key ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'}`}
+                                                    >
+                                                        {month.label} {month.count}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                         <div className="mt-4">
                                             <input
                                                 type="search"
                                                 value={submissionQuery}
                                                 onChange={(e) => setSubmissionQuery(e.target.value)}
-                                                placeholder="단체명으로 찾기 (예: 군청 경제과)"
+                                                placeholder="이 달에서 단체명으로 찾기 (예: 군청 경제과)"
                                                 className="w-full border-2 border-slate-200 focus:border-emerald-500 rounded-xl px-4 py-3 outline-none text-slate-800 font-bold"
                                             />
-                                            <p className="text-slate-400 text-xs font-bold mt-2">전체 {allSubmissions.length}건{submissionQuery.trim() ? ` · 단체명 검색 ${filteredSubmissions.length}건` : ''}</p>
+                                            <p className="text-slate-400 text-xs font-bold mt-2">{activeMonthKey ? `${submissionMonthLabel(activeMonthKey)} ${monthSubmissions.length}건` : '제출 없음'} · 전체 {allSubmissions.length}건</p>
                                         </div>
                                     </div>
 
@@ -2429,10 +2532,22 @@
                                         </div>
                                     )}
 
-                                    {filteredSubmissions.length === 0 ? (
+                                    {monthSubmissions.length === 0 ? (
                                         <div className="bg-white p-12 text-center rounded-xl shadow-sm border border-slate-200">
                                             <i className="fas fa-box-open text-5xl text-slate-300 mb-4"></i>
-                                            <h3 className="text-lg font-bold text-slate-600">{submissionQuery.trim() ? '이 단체명으로 찾은 제출이 없습니다.' : '아직 제출된 객실 배정이 없습니다.'}</h3>
+                                            <h3 className="text-lg font-bold text-slate-600">{submissionQuery.trim() ? '이 달에는 그 단체명으로 찾은 제출이 없습니다.' : '아직 제출된 객실 배정이 없습니다.'}</h3>
+                                            {otherMonthMatches.length > 0 && (
+                                                <div className="mt-5">
+                                                    <p className="text-sm font-bold text-amber-800 mb-3">다른 달에 같은 단체명이 있습니다.</p>
+                                                    <div className="flex flex-wrap justify-center gap-2">
+                                                        {otherMonthMatches.map((month) => (
+                                                            <button key={month.key} type="button" onClick={() => setSelectedSubmissionMonth(month.key)} className="px-3 py-2 rounded-full text-xs font-black bg-amber-50 text-amber-800 border border-amber-200">
+                                                                {month.label} {month.count}건
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="space-y-8">
