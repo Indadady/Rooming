@@ -39,11 +39,11 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         window.FirebaseModules = {
             initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
-            getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc
+            getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, getDocs, deleteDoc
         };
     </script>
 
@@ -357,6 +357,33 @@
             } catch (e) {}
         };
 
+        const IDENTITY_MAP_KEY = 'tm_rooming_identityCodes';
+        const normalizeIdentityPart = (value) => String(value || '').trim().replace(/\s+/g, ' ');
+        const buildIdentityKey = (groupName, departDate) => {
+            const group = normalizeIdentityPart(groupName);
+            const date = normalizeIdentityPart(departDate);
+            if (!group || !date) return '';
+            return `${group}||${date}`;
+        };
+        const identityFromEvent = (data) => buildIdentityKey(
+            data?.groupName || data?.commonHeader?.groupName,
+            data?.departDate || data?.commonHeader?.date
+        );
+        const readIdentityMap = () => {
+            try {
+                const raw = JSON.parse(localStorage.getItem(IDENTITY_MAP_KEY) || '{}');
+                return raw && typeof raw === 'object' ? raw : {};
+            } catch (e) { return {}; }
+        };
+        const writeIdentityCode = (key, code) => {
+            if (!key || !code) return;
+            try {
+                const map = readIdentityMap();
+                map[key] = String(code).trim().toUpperCase();
+                localStorage.setItem(IDENTITY_MAP_KEY, JSON.stringify(map));
+            } catch (e) {}
+        };
+
         // 루밍 인쇄·페이지 분할 (최대 200명 / 대규모 단체 A4 안전 출력)
         const ROOMING_MAX_PAX = 200;
         const ROOMING_BASE_FONT = 10.5;
@@ -564,6 +591,7 @@
             const [db, setDb] = useState(null);
             const [user, setUser] = useState(null);
             const [allSubmissions, setAllSubmissions] = useState([]);
+            const [submissionQuery, setSubmissionQuery] = useState('');
             const [submissionsError, setSubmissionsError] = useState('');
 
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'tourmaker-rooming-app';
@@ -655,14 +683,17 @@
                 if (code) writeStoredEventCode(code);
             }, [commonHeader.eventCode, isUrlShared]);
 
-            const visibleSubmissions = useMemo(() => {
-                const code = String(commonHeader.eventCode || '').trim().toUpperCase();
-                return allSubmissions.filter(d => String(d.eventCode || '').toUpperCase() === code);
-            }, [allSubmissions, commonHeader.eventCode]);
-            const otherSubmissions = useMemo(() => {
-                const code = String(commonHeader.eventCode || '').trim().toUpperCase();
-                return allSubmissions.filter(d => String(d.eventCode || '').toUpperCase() !== code).slice(0, 8);
-            }, [allSubmissions, commonHeader.eventCode]);
+            const filteredSubmissions = useMemo(() => {
+                const q = normalizeIdentityPart(submissionQuery).toLowerCase();
+                if (!q) return allSubmissions;
+                return allSubmissions.filter((sub) => {
+                    const group = normalizeIdentityPart(sub.groupName || sub.commonHeader?.groupName || '');
+                    const submitter = normalizeIdentityPart(sub.submitterName || '');
+                    const date = normalizeIdentityPart(sub.departDate || sub.commonHeader?.date || '');
+                    const code = String(sub.eventCode || '');
+                    return `${group} ${submitter} ${date} ${code}`.toLowerCase().includes(q);
+                });
+            }, [allSubmissions, submissionQuery]);
 
 
             const showAlert = (message) => {
@@ -1137,16 +1168,54 @@
                 return nextCode;
             };
             
-            const buildEventConfigPayload = (eventCode) => ({
+            const buildEventConfigPayload = (eventCode, groupName, departDate) => ({
                 eventCode,
-                commonHeader: { ...commonHeader, eventCode },
+                groupName,
+                departDate,
+                identityKey: buildIdentityKey(groupName, departDate),
+                commonHeader: { ...commonHeader, groupName, date: departDate, eventCode },
                 isInternationalRooming,
                 docFontSize,
                 rooms: sanitizeRooms(rooms),
                 stats: computeRoomStats(rooms),
                 updatedAt: new Date().toISOString(),
-                schemaVersion: 'tourmaker-rooming-v2.2'
+                schemaVersion: 'tourmaker-rooming-v2.4'
             });
+
+            const resolveEventCode = async (groupName, departDate) => {
+                const key = buildIdentityKey(groupName, departDate);
+                const { collection, getDocs } = window.FirebaseModules;
+                const eventsRef = collection(db, 'artifacts', appId, 'public', 'data', 'rooming_events');
+                let docs = [];
+                let listed = true;
+                try {
+                    const snap = await getDocs(eventsRef);
+                    docs = snap.docs.map(d => ({ id: String(d.id || '').toUpperCase(), data: d.data() || {} }));
+                } catch (err) {
+                    listed = false;
+                    console.error('Event list error:', err);
+                }
+
+                const match = docs.find(d => identityFromEvent(d.data) === key);
+                if (match) return { code: match.id, listed };
+
+                const localCode = String(readIdentityMap()[key] || '').toUpperCase();
+                const localDoc = docs.find(d => d.id === localCode);
+                if (localCode && (!localDoc || identityFromEvent(localDoc.data) === key)) {
+                    return { code: localCode, listed };
+                }
+
+                const headerCode = safeText(commonHeader.eventCode).toUpperCase();
+                const headerDoc = docs.find(d => d.id === headerCode);
+                const localOwner = Object.entries(readIdentityMap()).find(([, saved]) => String(saved || '').toUpperCase() === headerCode);
+                const headerOwnedByOther = (headerDoc && identityFromEvent(headerDoc.data) !== key) || (localOwner && localOwner[0] !== key);
+                if (headerCode && !headerOwnedByOther) return { code: headerCode, listed };
+
+                const used = new Set(docs.map(d => d.id));
+                let code = generateEventCode();
+                while (used.has(code)) code = generateEventCode();
+                return { code, listed };
+            };
 
             useEffect(() => {
                 if (!user || !db || !isSharedMode || !urlEventCode) return;
@@ -1584,37 +1653,54 @@
             };
 
             const handleCopyLink = async () => {
-                const currentCode = getStableEventCode();
-                const baseUrl = window.location.origin + window.location.pathname;
-                const shareUrl = `${baseUrl}?shared=true&code=${encodeURIComponent(currentCode)}`;
+                const groupName = normalizeIdentityPart(commonHeader.groupName);
+                const departDate = normalizeIdentityPart(commonHeader.date);
+                if (!groupName || !departDate) {
+                    showAlert('링크를 만들기 전에 루밍 헤더의 단체명과 일정을 먼저 입력해 주세요.\n단체명과 일정이 같으면 같은 링크로 갱신되고, 하나라도 다르면 새 코드가 만들어집니다.');
+                    return;
+                }
+                if (!db || !user) {
+                    showAlert("⚠️ 서버 연결이 아직 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.");
+                    return;
+                }
 
+                const previousCode = safeText(commonHeader.eventCode).toUpperCase();
+                let currentCode = '';
                 try {
-                    if (!db || !user) {
-                        showAlert("⚠️ 서버 연결이 아직 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.");
-                        return;
-                    }
+                    const resolved = await resolveEventCode(groupName, departDate);
+                    currentCode = resolved.code;
                     const { doc, setDoc } = window.FirebaseModules;
                     const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooming_events', currentCode);
-                    await setDoc(eventRef, buildEventConfigPayload(currentCode), { merge: true });
+                    await setDoc(eventRef, buildEventConfigPayload(currentCode, groupName, departDate), { merge: true });
+                    writeIdentityCode(buildIdentityKey(groupName, departDate), currentCode);
+                    writeStoredEventCode(currentCode);
+                    setCommonHeader(prev => ({ ...prev, groupName, date: departDate, eventCode: currentCode }));
                 } catch (err) {
                     console.error('Event config save error:', err);
                     showAlert("⚠️ 공유 링크용 기본 데이터를 저장하지 못했습니다. Firebase 권한/네트워크를 확인해 주세요.");
                     return;
                 }
 
+                const baseUrl = window.location.origin + window.location.pathname;
+                const shareUrl = `${baseUrl}?shared=true&code=${encodeURIComponent(currentCode)}`;
+                const note = currentCode !== previousCode
+                    ? `단체명 또는 일정이 달라 새 공유 코드 ${currentCode}가 만들어졌습니다. 이전 링크는 그대로 유지됩니다.`
+                    : `같은 단체명·일정(${groupName} / ${departDate}) 링크로 갱신했습니다.`;
+
                 fetch(`https://is.gd/create.php?format=json&url=${encodeURIComponent(shareUrl)}`)
                     .then(res => res.json())
-                    .then(data => { executeCopy(data.shorturl || shareUrl); })
-                    .catch(() => { executeCopy(shareUrl); });
+                    .then(data => { executeCopy(data.shorturl || shareUrl, note); })
+                    .catch(() => { executeCopy(shareUrl, note); });
             };
 
-            const executeCopy = (urlToCopy) => {
+            const executeCopy = (urlToCopy, note) => {
                 const textArea = document.createElement("textarea");
                 textArea.value = urlToCopy; textArea.style.position = "fixed"; textArea.style.top = "-9999px"; textArea.style.left = "-9999px";
                 document.body.appendChild(textArea); textArea.focus(); textArea.select();
                 try {
                     const successful = document.execCommand('copy');
-                    if(successful) showAlert(`✅ 고객 전용 배정 링크(${urlToCopy})가 복사되었습니다! 담당자에게 전달해주세요.`);
+                    const message = `✅ 고객 전용 배정 링크(${urlToCopy})가 복사되었습니다! 담당자에게 전달해주세요.${note ? `\n\n${note}` : ''}`;
+                    if(successful) showAlert(message);
                     else showPrompt("자동 복사에 실패했습니다. 복사해주세요:", urlToCopy, () => {});
                 } catch (err) { showPrompt("자동 복사에 실패했습니다. 복사해주세요:", urlToCopy, () => {}); } 
                 finally { document.body.removeChild(textArea); }
@@ -1630,7 +1716,7 @@
 
             const handleSubmitRooming = () => {
                 if (isSharedMode && !isUrlShared) {
-                    showAlert('✅ 미리보기입니다. 이 화면의 제출은 서버에 저장되지 않습니다.\n\n실제 확인은 [링크 복사]로 만든 주소를 새 탭에서 연 뒤 제출해 주세요.\n제출 후 관리자 화면의 「3. 방배정 완료」에서 같은 공유 코드로 확인합니다.');
+                    showAlert('✅ 미리보기입니다. 이 화면의 제출은 서버에 저장되지 않습니다.\n\n실제 확인은 [링크 복사]로 만든 주소를 새 탭에서 연 뒤 제출해 주세요.\n제출 후 관리자 화면의 「3. 방배정 완료」에서 어느 PC로 열어도 전체 목록으로 확인합니다.');
                     return;
                 }
                 // 담당자는 한글 이름만 입력 → 제출 시 영문명 자동 보완(해외 인쇄/호텔용)
@@ -1674,6 +1760,7 @@
                         await addDoc(subRef, {
                             eventCode: currentCode,
                             groupName: commonHeader.groupName || '미지정 단체',
+                            departDate: normalizeIdentityPart(commonHeader.date),
                             submitterName: submitterName.trim(),
                             submittedAt: new Date().toISOString(),
                             commonHeader: { ...commonHeader, eventCode: currentCode },
@@ -1702,6 +1789,11 @@
                         if (submission.commonHeader) {
                             setCommonHeader(prev => ({ ...prev, ...submission.commonHeader, eventCode: submission.eventCode || prev.eventCode }));
                         }
+                        const loadedKey = buildIdentityKey(
+                            submission.commonHeader?.groupName || submission.groupName,
+                            submission.departDate || submission.commonHeader?.date
+                        );
+                        if (loadedKey && submission.eventCode) writeIdentityCode(loadedKey, submission.eventCode);
                         if (typeof submission.isInternationalRooming === 'boolean') {
                             setIsInternationalRooming(submission.isInternationalRooming);
                         }
@@ -1784,7 +1876,7 @@
                                 </button>
                                 {!isSharedMode && (
                                     <button onClick={() => setActiveMainTab('results')} className={`whitespace-nowrap px-3 md:px-5 py-2 md:py-4 h-full flex items-center font-bold text-[13px] md:text-sm border-b-[3px] transition-all md:rounded-t-md ${activeMainTab === 'results' ? 'border-emerald-400 text-emerald-400 bg-slate-800' : 'border-transparent text-slate-400 hover:text-emerald-200 hover:bg-slate-800'}`}>
-                                        <i className="fas fa-inbox mr-2"></i> 3. 방배정 완료 <span className="ml-2 bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{visibleSubmissions.length}</span>
+                                        <i className="fas fa-inbox mr-2"></i> 3. 방배정 완료 <span className="ml-2 bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{allSubmissions.length}</span>
                                     </button>
                                 )}
                             </div>
@@ -2056,7 +2148,7 @@
                                         <div className="flex flex-col lg:flex-row lg:items-end gap-4 justify-between">
                                             <div className="flex-1">
                                                 <p className="font-black text-emerald-900 text-sm md:text-base mb-1"><i className="fas fa-bed mr-2"></i>1) 방 구성 만들기 (담당자는 이름·성별만 입력)</p>
-                                                <p className="text-[11px] md:text-xs text-emerald-800 font-bold mb-3">링크 전에 아래 루밍 헤더의 단체명·일정·지역을 먼저 적어 두세요. 담당자 화면에 그대로 보입니다.</p>
+                                                <p className="text-[11px] md:text-xs text-emerald-800 font-bold mb-3">링크 전에 단체명과 일정을 먼저 적으세요. 둘 다 같으면 같은 코드로 갱신되고, 단체명이나 일정이 다르면 새 코드가 만들어져 이전 링크는 그대로 남습니다.</p>
                                                 <div className="flex flex-wrap gap-2 items-end">
                                                     {[
                                                         { key: 'TWIN', label: '2인실' },
@@ -2293,12 +2385,21 @@
                         {!isSharedMode && (
                             <div className={activeMainTab === 'results' ? 'block' : 'hidden'}>
                                 <div className="max-w-[1000px] mx-auto py-8 px-4">
-                                    <div className="mb-8 border-b-2 border-slate-200 pb-4">
+                                    <div className="mb-6 border-b-2 border-slate-200 pb-4">
                                         <h2 className="text-2xl font-black text-slate-800 mb-2 flex items-center gap-2">
                                             <i className="fas fa-inbox text-emerald-500"></i> 제출된 객실 배정 목록
                                         </h2>
-                                        <p className="text-slate-500 font-bold">고객이 링크를 통해 제출한 데이터가 실시간으로 이곳에 쌓입니다. 현재 공유 코드: <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">{commonHeader.eventCode || '미설정'}</span></p>
-                                        <p className="text-slate-400 text-sm font-bold mt-1">링크 주소의 <span className="font-black text-slate-600">code=</span> 값과 위 코드가 같아야 어제 제출분도 보입니다. (같은 PC·같은 IP여도 무관합니다)</p>
+                                        <p className="text-slate-500 font-bold">어느 PC에서 열어도 제출 전체가 표시됩니다. 같은 공유 코드라도 단체명·일정이 다르면 각각 다른 제출로 남아 있습니다.</p>
+                                        <div className="mt-4">
+                                            <input
+                                                type="search"
+                                                value={submissionQuery}
+                                                onChange={(e) => setSubmissionQuery(e.target.value)}
+                                                placeholder="단체명으로 찾기 (예: 군청 경제과)"
+                                                className="w-full border-2 border-slate-200 focus:border-emerald-500 rounded-xl px-4 py-3 outline-none text-slate-800 font-bold"
+                                            />
+                                            <p className="text-slate-400 text-xs font-bold mt-2">전체 {allSubmissions.length}건{submissionQuery.trim() ? ` · 검색 결과 ${filteredSubmissions.length}건` : ''}</p>
+                                        </div>
                                     </div>
 
                                     {submissionsError && (
@@ -2307,39 +2408,28 @@
                                         </div>
                                     )}
 
-                                    {visibleSubmissions.length === 0 ? (
+                                    {filteredSubmissions.length === 0 ? (
                                         <div className="bg-white p-12 text-center rounded-xl shadow-sm border border-slate-200">
                                             <i className="fas fa-box-open text-5xl text-slate-300 mb-4"></i>
-                                            <h3 className="text-lg font-bold text-slate-600">이 공유 코드로는 아직 제출이 없습니다.</h3>
-                                            <p className="text-slate-400 text-sm mt-2">담당자 링크의 코드가 <span className="font-black text-slate-600">{commonHeader.eventCode || '미설정'}</span> 인지 확인해 주세요.</p>
-                                            {otherSubmissions.length > 0 && (
-                                                <div className="mt-6 text-left bg-amber-50 border border-amber-200 rounded-xl p-4">
-                                                    <p className="text-amber-800 font-black text-sm mb-3">다른 코드로 들어온 제출 {otherSubmissions.length}건이 있습니다. 코드를 누르면 해당 건을 봅니다.</p>
-                                                    <div className="grid gap-2">
-                                                        {otherSubmissions.map((sub) => (
-                                                            <button key={sub.id} type="button" onClick={() => setCommonHeader(prev => ({ ...prev, eventCode: String(sub.eventCode || '').toUpperCase() }))} className="w-full text-left bg-white border border-amber-200 rounded-lg px-3 py-2 hover:border-emerald-400 transition">
-                                                                <span className="font-black text-emerald-700 mr-2">{sub.eventCode || '코드없음'}</span>
-                                                                <span className="font-bold text-slate-700">{sub.submitterName || '이름 미입력'}</span>
-                                                                <span className="text-slate-400 text-xs ml-2">{sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : ''}</span>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
+                                            <h3 className="text-lg font-bold text-slate-600">{submissionQuery.trim() ? '이 단체명으로 찾은 제출이 없습니다.' : '아직 제출된 객실 배정이 없습니다.'}</h3>
                                         </div>
                                     ) : (
                                         <div className="grid gap-4">
-                                            {visibleSubmissions.map((sub, idx) => (
+                                            {filteredSubmissions.map((sub) => {
+                                                const groupLabel = sub.groupName || sub.commonHeader?.groupName || '단체명 없음';
+                                                const dateLabel = sub.departDate || sub.commonHeader?.date || '일정 없음';
+                                                return (
                                                 <div key={sub.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:shadow-md transition relative group">
                                                     <button onClick={() => handleDeleteSubmission(sub.id)} className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors" title="이 제출본 삭제">
                                                         <i className="fas fa-times text-lg"></i>
                                                     </button>
                                                     <div className="pr-6">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">NEW</span>
-                                                            <h3 className="text-lg font-black text-slate-800">{sub.submitterName} 제출본</h3>
+                                                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                            <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-full">{sub.eventCode || '코드없음'}</span>
+                                                            <h3 className="text-lg font-black text-slate-800">{groupLabel}</h3>
                                                         </div>
-                                                        <p className="text-sm text-slate-500 font-bold"><i className="far fa-clock mr-1"></i> 제출 시간: {new Date(sub.submittedAt).toLocaleString()}</p>
+                                                        <p className="text-sm text-slate-600 font-bold">일정 {dateLabel} · {sub.submitterName || '이름 미입력'} 제출</p>
+                                                        <p className="text-sm text-slate-500 font-bold mt-1"><i className="far fa-clock mr-1"></i> 제출 시간: {sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : ''}</p>
                                                         <div className="flex gap-3 mt-3">
                                                             <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold"><i className="fas fa-users mr-1 text-slate-400"></i> 총 {sub.stats?.total || 0}명</span>
                                                             <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold"><i className="fas fa-bed mr-1 text-slate-400"></i> 객실 {sub.rooms?.length || 0}개</span>
@@ -2349,7 +2439,8 @@
                                                         <i className="fas fa-file-import"></i> 이 배정본 적용하기
                                                     </button>
                                                 </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>
