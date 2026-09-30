@@ -683,17 +683,37 @@
                 if (code) writeStoredEventCode(code);
             }, [commonHeader.eventCode, isUrlShared]);
 
+            const submissionLabel = (sub) => {
+                const group = normalizeIdentityPart(sub.groupName || sub.commonHeader?.groupName || '');
+                const submitter = normalizeIdentityPart(sub.submitterName || '');
+                return {
+                    group: group || submitter || '단체명 없음',
+                    submitter,
+                    date: normalizeIdentityPart(sub.departDate || sub.commonHeader?.date || '') || '일정 없음'
+                };
+            };
             const filteredSubmissions = useMemo(() => {
                 const q = normalizeIdentityPart(submissionQuery).toLowerCase();
                 if (!q) return allSubmissions;
                 return allSubmissions.filter((sub) => {
-                    const group = normalizeIdentityPart(sub.groupName || sub.commonHeader?.groupName || '');
-                    const submitter = normalizeIdentityPart(sub.submitterName || '');
-                    const date = normalizeIdentityPart(sub.departDate || sub.commonHeader?.date || '');
-                    const code = String(sub.eventCode || '');
-                    return `${group} ${submitter} ${date} ${code}`.toLowerCase().includes(q);
+                    const label = submissionLabel(sub);
+                    return `${label.group} ${label.submitter} ${label.date}`.toLowerCase().includes(q);
                 });
             }, [allSubmissions, submissionQuery]);
+            const submissionGroups = useMemo(() => {
+                const groups = [];
+                const index = new Map();
+                filteredSubmissions.forEach((sub) => {
+                    const code = String(sub.eventCode || '').trim().toUpperCase() || '코드없음';
+                    if (!index.has(code)) {
+                        const bucket = { code, items: [] };
+                        index.set(code, bucket);
+                        groups.push(bucket);
+                    }
+                    index.get(code).items.push(sub);
+                });
+                return groups;
+            }, [filteredSubmissions]);
 
 
             const showAlert = (message) => {
@@ -1885,7 +1905,7 @@
                                 {!isSharedMode && (
                                     <React.Fragment>
                                         <div className="flex items-center gap-2 mr-2 bg-slate-800 px-2 py-1 rounded text-xs">
-                                            <span className="text-slate-400 whitespace-nowrap">공유 코드:</span>
+                                            <span className="text-slate-400 whitespace-nowrap" title="고객 링크를 만들 때 쓰는 코드입니다. 제출 목록은 이 코드로 걸러지지 않습니다.">링크 코드:</span>
                                             <input type="text" className="bg-transparent text-emerald-400 font-bold w-24 xl:w-40 outline-none text-center transition-all uppercase" value={commonHeader.eventCode} onChange={e=>setCommonHeader({...commonHeader, eventCode: e.target.value.toUpperCase()})} placeholder="코드" />
                                         </div>
                                         <button onClick={handleCopyLink} className="text-emerald-300 hover:text-emerald-100 px-2 py-1.5 text-xs font-bold transition flex items-center gap-1 whitespace-nowrap" title="고객 설문 전송용 링크 복사"><i className="fas fa-link"></i> 링크 복사</button>
@@ -2389,7 +2409,8 @@
                                         <h2 className="text-2xl font-black text-slate-800 mb-2 flex items-center gap-2">
                                             <i className="fas fa-inbox text-emerald-500"></i> 제출된 객실 배정 목록
                                         </h2>
-                                        <p className="text-slate-500 font-bold">어느 PC에서 열어도 제출 전체가 표시됩니다. 같은 공유 코드라도 단체명·일정이 다르면 각각 다른 제출로 남아 있습니다.</p>
+                                        <p className="text-slate-500 font-bold">어느 PC에서 열어도 제출 전체가 보입니다. 위쪽 링크 코드는 고객 링크를 만들 때만 쓰이고, 이 목록을 거르지 않습니다.</p>
+                                        <p className="text-slate-400 text-sm font-bold mt-1">같은 코드로 들어온 자료는 코드별로 모여 있고, 단체명이 다르면 각각 따로 표시됩니다. 찾으실 때는 단체명을 입력하세요.</p>
                                         <div className="mt-4">
                                             <input
                                                 type="search"
@@ -2398,7 +2419,7 @@
                                                 placeholder="단체명으로 찾기 (예: 군청 경제과)"
                                                 className="w-full border-2 border-slate-200 focus:border-emerald-500 rounded-xl px-4 py-3 outline-none text-slate-800 font-bold"
                                             />
-                                            <p className="text-slate-400 text-xs font-bold mt-2">전체 {allSubmissions.length}건{submissionQuery.trim() ? ` · 검색 결과 ${filteredSubmissions.length}건` : ''}</p>
+                                            <p className="text-slate-400 text-xs font-bold mt-2">전체 {allSubmissions.length}건{submissionQuery.trim() ? ` · 단체명 검색 ${filteredSubmissions.length}건` : ''}</p>
                                         </div>
                                     </div>
 
@@ -2414,31 +2435,43 @@
                                             <h3 className="text-lg font-bold text-slate-600">{submissionQuery.trim() ? '이 단체명으로 찾은 제출이 없습니다.' : '아직 제출된 객실 배정이 없습니다.'}</h3>
                                         </div>
                                     ) : (
-                                        <div className="grid gap-4">
-                                            {filteredSubmissions.map((sub) => {
-                                                const groupLabel = sub.groupName || sub.commonHeader?.groupName || '단체명 없음';
-                                                const dateLabel = sub.departDate || sub.commonHeader?.date || '일정 없음';
+                                        <div className="space-y-8">
+                                            {submissionGroups.map((group) => {
+                                                const groupNames = [...new Set(group.items.map((sub) => submissionLabel(sub).group))];
                                                 return (
-                                                <div key={sub.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:shadow-md transition relative group">
-                                                    <button onClick={() => handleDeleteSubmission(sub.id)} className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors" title="이 제출본 삭제">
-                                                        <i className="fas fa-times text-lg"></i>
-                                                    </button>
-                                                    <div className="pr-6">
-                                                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                                            <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-full">{sub.eventCode || '코드없음'}</span>
-                                                            <h3 className="text-lg font-black text-slate-800">{groupLabel}</h3>
+                                                    <section key={group.code}>
+                                                        <div className="flex items-end justify-between gap-3 mb-3">
+                                                            <div>
+                                                                <h3 className="text-sm font-black text-emerald-700">공유 코드 {group.code}</h3>
+                                                                <p className="text-xs font-bold text-slate-400 mt-0.5">{group.items.length}건{groupNames.length > 1 ? ` · 단체명 ${groupNames.length}곳` : ''}</p>
+                                                            </div>
                                                         </div>
-                                                        <p className="text-sm text-slate-600 font-bold">일정 {dateLabel} · {sub.submitterName || '이름 미입력'} 제출</p>
-                                                        <p className="text-sm text-slate-500 font-bold mt-1"><i className="far fa-clock mr-1"></i> 제출 시간: {sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : ''}</p>
-                                                        <div className="flex gap-3 mt-3">
-                                                            <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold"><i className="fas fa-users mr-1 text-slate-400"></i> 총 {sub.stats?.total || 0}명</span>
-                                                            <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold"><i className="fas fa-bed mr-1 text-slate-400"></i> 객실 {sub.rooms?.length || 0}개</span>
+                                                        <div className="grid gap-4">
+                                                            {group.items.map((sub) => {
+                                                                const label = submissionLabel(sub);
+                                                                const showSubmitter = label.submitter && label.submitter !== label.group;
+                                                                return (
+                                                                    <div key={sub.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:shadow-md transition relative">
+                                                                        <button onClick={() => handleDeleteSubmission(sub.id)} className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors" title="이 제출본 삭제">
+                                                                            <i className="fas fa-times text-lg"></i>
+                                                                        </button>
+                                                                        <div className="pr-6">
+                                                                            <h3 className="text-lg font-black text-slate-800">{label.group}</h3>
+                                                                            <p className="text-sm text-slate-600 font-bold mt-1">일정 {label.date}{showSubmitter ? ` · 제출명 ${label.submitter}` : ''}</p>
+                                                                            <p className="text-sm text-slate-500 font-bold mt-1"><i className="far fa-clock mr-1"></i> 제출 시간: {sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : ''}</p>
+                                                                            <div className="flex gap-3 mt-3">
+                                                                                <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold"><i className="fas fa-users mr-1 text-slate-400"></i> 총 {sub.stats?.total || 0}명</span>
+                                                                                <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold"><i className="fas fa-bed mr-1 text-slate-400"></i> 객실 {sub.rooms?.length || 0}개</span>
+                                                                            </div>
+                                                                        </div>
+                                                                        <button onClick={() => loadSubmission(sub)} className="w-full md:w-auto bg-slate-800 hover:bg-black text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow-sm transition flex items-center justify-center gap-2 mt-2 md:mt-0">
+                                                                            <i className="fas fa-file-import"></i> 이 배정본 적용하기
+                                                                        </button>
+                                                                    </div>
+                                                                );
+                                                            })}
                                                         </div>
-                                                    </div>
-                                                    <button onClick={() => loadSubmission(sub)} className="w-full md:w-auto bg-slate-800 hover:bg-black text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow-sm transition flex items-center justify-center gap-2 mt-2 md:mt-0">
-                                                        <i className="fas fa-file-import"></i> 이 배정본 적용하기
-                                                    </button>
-                                                </div>
+                                                    </section>
                                                 );
                                             })}
                                         </div>
