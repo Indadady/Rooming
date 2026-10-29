@@ -2379,13 +2379,16 @@
 
                                     {/* 툴바 영역 (관리자, 고객 공통) */}
                                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4 bg-blue-50 py-3 px-3 md:px-4 rounded border border-blue-100">
-                                        <div className="flex flex-col sm:flex-row gap-2 md:items-center">
-                                            <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm w-full sm:w-auto">
+                                        <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+                                            <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm w-full sm:w-auto self-start">
                                                 <button onClick={() => setIsInternationalRooming(false)} className={`flex-1 sm:flex-none px-3 py-1.5 rounded text-xs md:text-sm font-bold transition ${!isInternationalRooming ? 'bg-blue-50 text-blue-600' : 'text-slate-500'}`}>국내행사(한글)</button>
                                                 <button onClick={() => setIsInternationalRooming(true)} className={`flex-1 sm:flex-none px-3 py-1.5 rounded text-xs md:text-sm font-bold transition ${isInternationalRooming ? 'bg-blue-50 text-blue-600' : 'text-slate-500'}`}>해외행사(영문)</button>
                                             </div>
-                                            <p className="text-[11px] md:text-xs text-blue-800 font-bold leading-relaxed ml-1 hidden lg:block">
-                                                <i className="fas fa-lightbulb text-amber-500 mr-1"></i> 텍스트를 복사해 붙여넣으면 시스템이 알아서 배치합니다. (최대 {ROOMING_MAX_PAX}명 · 인쇄 {totalRoomPages}페이지 예상)
+                                            <p className="text-[11px] md:text-xs text-blue-800 font-bold leading-snug hidden md:block">
+                                                <i className="fas fa-lightbulb text-amber-500 mr-1"></i>
+                                                텍스트를 복사해 붙여넣으면<br />
+                                                시스템이 알아서 배치합니다.<br />
+                                                (최대 {ROOMING_MAX_PAX}명 · 인쇄 {totalRoomPages}페이지 예상)
                                             </p>
                                         </div>
                                         
