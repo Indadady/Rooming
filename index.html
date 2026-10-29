@@ -1745,6 +1745,92 @@
                 setActiveMainTab('rooming');
             };
 
+            const normalizeKorName = (name) => String(name || '').replace(/\s+/g, '').trim();
+            const toGenderKey = (gender) => {
+                const v = String(gender || '').trim().toUpperCase();
+                if (v === 'F' || v === '여' || v === 'FEMALE') return 'F';
+                if (v === 'M' || v === '남' || v === 'MALE') return 'M';
+                return '';
+            };
+
+            // 담당자는 한글만 배정 → 관리자가 여행자명단(여권) 영문을 루밍에 반영
+            const syncEngNamesFromTravelers = () => {
+                const validTravelers = travelers.filter((t) => normalizeKorName(t.nameKor) && String(t.nameEng || '').trim());
+                if (!validTravelers.length) {
+                    showAlert('⚠️ 여행자 명단에 여권 영문이 없습니다.\n\n1) 「여행자 명단」 탭에서 여권 영문을 입력·업로드하고\n2) 다시 「여행자명단 영문 동기화」를 눌러 주세요.');
+                    return;
+                }
+
+                const byName = new Map();
+                validTravelers.forEach((t) => {
+                    const key = normalizeKorName(t.nameKor);
+                    if (!byName.has(key)) byName.set(key, []);
+                    byName.get(key).push(t);
+                });
+
+                let synced = 0;
+                let already = 0;
+                const noMatch = [];
+                const ambiguous = [];
+                const overwritten = [];
+
+                const nextRooms = rooms.map((room) => ({
+                    ...room,
+                    guests: room.guests.map((guest) => {
+                        const key = normalizeKorName(guest.name);
+                        if (!key) return guest;
+
+                        const candidates = byName.get(key) || [];
+                        let pick = null;
+                        if (candidates.length === 1) {
+                            pick = candidates[0];
+                        } else if (candidates.length > 1) {
+                            const gk = toGenderKey(guest.gender);
+                            const filtered = candidates.filter((t) => toGenderKey(t.gender) === gk);
+                            if (filtered.length === 1) pick = filtered[0];
+                            else {
+                                ambiguous.push(guest.name);
+                                return guest;
+                            }
+                        } else {
+                            noMatch.push(guest.name);
+                            return guest;
+                        }
+
+                        const passportEng = String(pick.nameEng).trim().toUpperCase();
+                        const current = String(guest.engName || '').trim().toUpperCase();
+                        const auto = koreanToEnglish(guest.name).toUpperCase();
+                        if (current === passportEng) {
+                            already += 1;
+                            return guest;
+                        }
+                        if (current && current !== auto && current !== passportEng) {
+                            overwritten.push(`${guest.name}: ${current} → ${passportEng}`);
+                        }
+                        synced += 1;
+                        return { ...guest, engName: passportEng };
+                    })
+                }));
+
+                setRooms(nextRooms);
+
+                const lines = [
+                    '✅ 여행자 명단(여권) 영문 동기화 완료',
+                    '',
+                    `· 반영: ${synced}명`,
+                    `· 이미 동일: ${already}명`,
+                ];
+                if (noMatch.length) lines.push(`· 명단 없음: ${noMatch.join(', ')}`);
+                if (ambiguous.length) lines.push(`· 동명이인(수동확인): ${[...new Set(ambiguous)].join(', ')}`);
+                if (overwritten.length) {
+                    lines.push('· 기존 영문 덮어씀:');
+                    overwritten.slice(0, 8).forEach((x) => lines.push(`  - ${x}`));
+                    if (overwritten.length > 8) lines.push(`  …외 ${overwritten.length - 8}건`);
+                }
+                lines.push('', '※ 호텔·항공 송부 전 동명이인/미매칭만 한번 확인해 주세요.');
+                showAlert(lines.join('\n'));
+            };
+
             const handleResetRooming = () => {
                 setModal({
                     isOpen: true,
@@ -2306,16 +2392,25 @@
                                         <div className="flex items-center gap-2 flex-wrap justify-end">
                                             {/* 관리자에게만 보이는 엑셀 버튼 */}
                                             {!isSharedMode && (
-                                                <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded shadow-sm border border-emerald-400">
-                                                    <button onClick={downloadRoomingExcelTemplate} className="text-[11px] md:text-xs font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 transition whitespace-nowrap" title="루밍 엑셀 양식 다운로드"><i className="fas fa-download"></i> 양식 다운</button>
-                                                    <div className="w-[1px] h-3 bg-emerald-300"></div>
-                                                    
-                                                    {/* [NEW] 룸배정 엑셀 업로드 */}
-                                                    <label htmlFor="rooming-excel-upload" className="cursor-pointer text-[11px] md:text-xs font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 transition m-0 whitespace-nowrap"><i className="fas fa-upload"></i> 명단 업로드</label>
-                                                    <input type="file" id="rooming-excel-upload" accept=".xlsx, .xls" className="hidden" onChange={importRoomingExcelData} />
-                                                    <div className="w-[1px] h-3 bg-emerald-300"></div>
-                                                    
-                                                    <button onClick={exportRoomingToExcel} className="text-[11px] md:text-xs font-black text-emerald-700 hover:text-emerald-900 flex items-center gap-1 transition whitespace-nowrap" title="방배정 엑셀로 내보내기"><i className="fas fa-file-excel"></i> 완성본 엑셀 저장</button>
+                                                <div className="flex items-center gap-2 flex-wrap justify-end">
+                                                    <button
+                                                        onClick={syncEngNamesFromTravelers}
+                                                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded text-[11px] md:text-xs font-black shadow-sm whitespace-nowrap"
+                                                        title="여행자 명단의 여권 영문을 방배정 영문명에 반영합니다"
+                                                    >
+                                                        <i className="fas fa-passport mr-1"></i> 여행자명단 영문 동기화
+                                                    </button>
+                                                    <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded shadow-sm border border-emerald-400">
+                                                        <button onClick={downloadRoomingExcelTemplate} className="text-[11px] md:text-xs font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 transition whitespace-nowrap" title="루밍 엑셀 양식 다운로드"><i className="fas fa-download"></i> 양식 다운</button>
+                                                        <div className="w-[1px] h-3 bg-emerald-300"></div>
+                                                        
+                                                        {/* [NEW] 룸배정 엑셀 업로드 */}
+                                                        <label htmlFor="rooming-excel-upload" className="cursor-pointer text-[11px] md:text-xs font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1 transition m-0 whitespace-nowrap"><i className="fas fa-upload"></i> 명단 업로드</label>
+                                                        <input type="file" id="rooming-excel-upload" accept=".xlsx, .xls" className="hidden" onChange={importRoomingExcelData} />
+                                                        <div className="w-[1px] h-3 bg-emerald-300"></div>
+                                                        
+                                                        <button onClick={exportRoomingToExcel} className="text-[11px] md:text-xs font-black text-emerald-700 hover:text-emerald-900 flex items-center gap-1 transition whitespace-nowrap" title="방배정 엑셀로 내보내기"><i className="fas fa-file-excel"></i> 완성본 엑셀 저장</button>
+                                                    </div>
                                                 </div>
                                             )}
                                             
@@ -2411,8 +2506,11 @@
                                                     )}
 
                                                     {isFirstPage && isInternationalRooming && !isSharedMode && (
-                                                        <div className="flex justify-between items-center mb-2 gap-2">
-                                                            <p className="font-bold text-slate-500 no-print" style={{ fontSize: `${Math.max(9, docFontSize - 1)}pt` }}><i className="fas fa-info-circle mr-1"></i> 영문명은 한글 이름 자동 변환입니다. 호텔 배정용이며 여권 영문과 달라도 됩니다.</p>
+                                                        <div className="flex justify-between items-center mb-2 gap-2 no-print">
+                                                            <p className="font-bold text-slate-600" style={{ fontSize: `${Math.max(9, docFontSize - 1)}pt` }}>
+                                                                <i className="fas fa-info-circle mr-1 text-indigo-500"></i>
+                                                                담당자 배정은 한글만으로 가능합니다. 호텔·항공 송부 전에는 「여행자명단 영문 동기화」로 <span className="text-indigo-700">여권 영문</span>을 반영하세요. 자동변환은 임시값입니다.
+                                                            </p>
                                                         </div>
                                                     )}
 
